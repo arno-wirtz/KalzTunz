@@ -910,3 +910,190 @@ div:hover .history-del-btn {
 
 /* ── Search results count ── */
 .search-results-count { font-size: .79rem; color: var(--text-3); }
+
+/* ═══════════════════════════════════════════════════════
+   ENHANCED INTERACTIONS — hover, transitions, transforms
+   ═══════════════════════════════════════════════════════ */
+
+/* Card magnetic lift with glow */
+.card--hover {
+  transition: transform .25s cubic-bezier(.34,1.4,.64,1), box-shadow .25s ease, border-color .25s ease;
+}
+.card--hover:hover {
+  transform: translateY(-5px) scale(1.01);
+  box-shadow: var(--shadow), 0 0 0 1px var(--border-hi);
+}
+
+/* Button press feedback */
+.btn { transition: all .2s cubic-bezier(.34,1.4,.64,1); }
+.btn:active:not(:disabled) { transform: scale(.95) !important; }
+
+/* Nav link underline sweep */
+.nav-link {
+  transition: color .18s, background .18s;
+  position: relative;
+  overflow: hidden;
+}
+.nav-link::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg-3);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform .22s ease;
+  border-radius: 10px;
+  z-index: -1;
+}
+.nav-link:hover::before { transform: scaleX(1); transform-origin: left; }
+
+/* Chord pill pop on hover */
+.chord-pill {
+  transition: transform .18s cubic-bezier(.34,1.56,.64,1), box-shadow .18s ease, border-color .18s;
+  cursor: default;
+}
+.chord-pill:hover {
+  transform: translateY(-4px) scale(1.06);
+  box-shadow: 0 6px 20px rgba(0,0,0,.2);
+}
+
+/* Track card cover zoom */
+.track-card { transition: transform .25s cubic-bezier(.34,1.2,.64,1), box-shadow .25s ease, border-color .25s ease; }
+.track-card:hover { transform: translateY(-5px) scale(1.02); box-shadow: var(--shadow); }
+.track-card__cover { overflow: hidden; }
+.track-card__cover img { transition: transform .35s ease; }
+.track-card:hover .track-card__cover img { transform: scale(1.08); }
+
+/* Artist card slide */
+.artist-card { transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease; }
+.artist-card:hover { transform: translateX(4px); box-shadow: var(--shadow-sm); border-color: var(--border-hi); }
+
+/* Badge pop */
+.badge { transition: transform .15s ease; }
+.badge:hover { transform: scale(1.05); }
+
+/* Search bar focus ring */
+.search-bar { transition: border-color .2s, box-shadow .2s, transform .2s; }
+.search-bar:focus-within { transform: translateY(-1px); }
+
+/* Form inputs */
+.form-input, .form-select, .form-textarea {
+  transition: border-color .2s, box-shadow .2s, background .2s, transform .15s;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus { transform: translateY(-1px); }
+
+/* Upload zone hover pulse */
+.upload-zone {
+  transition: border-color .25s, background .25s, transform .2s;
+}
+.upload-zone:hover {
+  transform: scale(1.01);
+}
+.upload-zone--drag { transform: scale(1.02) !important; }
+
+/* Playlist card cover reveal */
+.lib-playlist-cover { transition: filter .25s ease; }
+.lib-playlist-card:hover .lib-playlist-cover { filter: brightness(0.85); }
+
+/* Mood chip morph */
+.mood-chip { transition: all .2s cubic-bezier(.34,1.2,.64,1); }
+.mood-chip:hover { transform: translateY(-2px) scale(1.05); }
+.mood-chip.active { transform: translateY(-1px); }
+
+/* Hero gradient pulse (subtle background animation) */
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 40% 40% at 50% 60%, rgba(255,107,71,.06) 0%, transparent 70%);
+  animation: heroPulse 4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes heroPulse {
+  0%,100% { opacity: 0.5; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.15); }
+}
+
+/* Scroll reveal via Intersection Observer (progressive) */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity .55s ease, transform .55s cubic-bezier(.4,0,.2,1);
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+
+/* Stats card gradient text — explicit rules to avoid JSX object key issues */
+.stat-value {
+  font-family: 'Playfair Display', serif;
+  font-size: 2rem;
+  font-weight: 900;
+  background-image: linear-gradient(135deg, var(--coral), var(--amber));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Gradient text utility class */
+.gradient-text {
+  background-image: linear-gradient(135deg, var(--coral), var(--amber));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Two-column hero responsive */
+@media (max-width: 760px) {
+  .hero-demo-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Page section fadeIn on load */
+.page > * {
+  animation-fill-mode: both;
+}
+
+/* Lib row hover glow */
+.lib-row {
+  transition: border-color .18s, background .18s, transform .18s;
+}
+.lib-row:hover {
+  transform: translateX(2px);
+  border-color: var(--border-hi);
+}
+
+/* Now playing bar entrance */
+.now-playing-bar {
+  animation: slideUpBar .3s cubic-bezier(.34,1.2,.64,1);
+}
+@keyframes slideUpBar {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Tooltip-style data attributes */
+[data-tip] { position: relative; cursor: help; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%; transform: translateX(-50%) scale(.9);
+  background: var(--bg-4); color: var(--text);
+  padding: .25rem .6rem; border-radius: 7px;
+  font-size: .7rem; white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s, transform .2s;
+  border: 1px solid var(--border-hi);
+  box-shadow: var(--shadow-sm);
+  z-index: 100;
+}
+[data-tip]:hover::after {
+  opacity: 1; transform: translateX(-50%) scale(1);
+}
+
+/* Responsive two-col hero demo */
+@media (max-width: 820px) {
+  .page > div[style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}

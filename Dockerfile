@@ -13,7 +13,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 COPY requirements.txt .
 # Install all deps; handle PyTorch CPU separately (inline --index-url not allowed in -r)
-RUN pip install --no-cache-dir --timeout=1000 -r requirements.txt && \
+RUN pip install --no-cache-dir --timeout=1000 --only-binary=scipy -r requirements.txt && \
     pip install --no-cache-dir --timeout=1000 \
         torch torchaudio \
         --index-url https://download.pytorch.org/whl/cpu
