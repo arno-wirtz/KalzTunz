@@ -2,239 +2,47 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAuth } from '../App'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const POLL_MS = 2000
+const POLL_MS  = 2000
 const ACCEPTED = '.mp3,.wav,.flac,.ogg,.aac,.mp4,.webm,.mov'
 
-/* ── Instrument catalogue ────────────────────────────────
-   Each instrument maps to the frequency ranges / timbres
-   librosa can separate. In full production you'd run
-   source-separation (Demucs) and analyse each stem.
-   Here we detect likely instruments from the file's spectral
-   features and let the user filter which to show.
-─────────────────────────────────────────────────────────── */
 const INSTRUMENTS = [
-  { id:'all',          label:'All Tracks',    icon:'🎼', color:'var(--coral)' },
-  { id:'piano',        label:'Piano',          icon:'🎹', color:'var(--amber)' },
-  { id:'guitar',       label:'Guitar',         icon:'🎸', color:'#e87a30' },
-  { id:'bass',         label:'Bass',           icon:'🎸', color:'#c44d2a' },
-  { id:'drums',        label:'Drums',          icon:'🥁', color:'#d97706' },
-  { id:'strings',      label:'Strings',        icon:'🎻', color:'var(--cyan)' },
-  { id:'brass',        label:'Brass/Wind',     icon:'🎷', color:'#f59e0b' },
-  { id:'vocals',       label:'Vocals',         icon:'🎤', color:'var(--red)' },
-  { id:'synth',        label:'Synth/Keys',     icon:'🎛️',  color:'#8b5cf6' },
+  { id:'all',     label:'All',       icon:'🎼', color:'var(--coral)' },
+  { id:'piano',   label:'Piano',     icon:'🎹', color:'var(--amber)' },
+  { id:'guitar',  label:'Guitar',    icon:'🎸', color:'#e87a30' },
+  { id:'bass',    label:'Bass',      icon:'🎸', color:'#c44d2a' },
+  { id:'drums',   label:'Drums',     icon:'🥁', color:'#d97706' },
+  { id:'strings', label:'Strings',   icon:'🎻', color:'var(--cyan)' },
+  { id:'brass',   label:'Brass',     icon:'🎷', color:'#f59e0b' },
+  { id:'vocals',  label:'Vocals',    icon:'🎤', color:'var(--red)' },
+  { id:'synth',   label:'Synth',     icon:'🎛️', color:'#8b5cf6' },
 ]
 
-/* ── Chord → fingering hint (simplified) ──────────────── */
-const CHORD_ROMAN = {
-  major: { C:'I', D:'II', E:'III', F:'IV', G:'V', A:'VI', B:'VII' },
-  minor: { C:'i', D:'ii', E:'iii', F:'iv', G:'v', A:'vi', B:'vii' },
-}
-
-const CHORD_COLORS = [
-  'var(--coral)','var(--amber)','var(--cyan)','#e87a30',
-  '#c44d2a','#8b5cf6','#d97706','var(--green)','var(--red)',
-]
+const CHORD_COLORS = ['var(--coral)','var(--amber)','var(--cyan)','#e87a30','#c44d2a','#8b5cf6','#d97706','var(--green)','var(--red)']
 
 function fmtDur(s) {
-  const m = Math.floor(s / 60), sec = Math.floor(s % 60)
+  const m = Math.floor(s/60), sec = Math.floor(s%60)
   return `${m}:${String(sec).padStart(2,'0')}`
 }
 
-/* ── Instrument detector (heuristic based on file metadata + name) ── */
-function detectInstruments(file, chords) {
-  const name = (file?.name || '').toLowerCase()
-  const detected = new Set(['all'])
-  if (name.includes('piano') || name.includes('keys'))   detected.add('piano')
-  if (name.includes('guitar') || name.includes('guit'))  detected.add('guitar')
-  if (name.includes('bass'))                             detected.add('bass')
-  if (name.includes('drum') || name.includes('beat'))    detected.add('drums')
-  if (name.includes('string') || name.includes('violin'))detected.add('strings')
-  if (name.includes('horn') || name.includes('brass') || name.includes('sax')) detected.add('brass')
-  if (name.includes('vocal') || name.includes('voice') || name.includes('sing')) detected.add('vocals')
-  if (name.includes('synth') || name.includes('electronic')) detected.add('synth')
-  // If nothing detected, show common ones
-  if (detected.size === 1) {
-    detected.add('piano'); detected.add('guitar'); detected.add('bass')
-  }
-  return detected
+function detectInstruments(file) {
+  const n = (file?.name||'').toLowerCase()
+  const det = new Set(['all'])
+  if (n.includes('piano')||n.includes('keys'))   det.add('piano')
+  if (n.includes('guitar')||n.includes('guit'))  det.add('guitar')
+  if (n.includes('bass'))                        det.add('bass')
+  if (n.includes('drum')||n.includes('beat'))    det.add('drums')
+  if (n.includes('string')||n.includes('violin'))det.add('strings')
+  if (n.includes('horn')||n.includes('brass')||n.includes('sax')) det.add('brass')
+  if (n.includes('vocal')||n.includes('voice'))  det.add('vocals')
+  if (n.includes('synth')||n.includes('electro'))det.add('synth')
+  if (det.size === 1) { det.add('piano'); det.add('guitar'); det.add('bass') }
+  return det
 }
 
-/* ── PDF Generator ───────────────────────────────────────
-   Builds a sheet-music-style PDF using the Canvas API,
-   then triggers browser download. No external PDF lib needed.
-─────────────────────────────────────────────────────────── */
-function generatePDF(result, file, instrument, progressions) {
-  const { chords = [], metadata = {} } = result
-  const title    = file?.name?.replace(/\.[^.]+$/, '') || 'KalzTunz Extraction'
-  const instrLabel = INSTRUMENTS.find(i => i.id === instrument)?.label || 'All'
-
-  // Build content lines
-  const lines = []
-  lines.push({ type:'title',  text: title })
-  lines.push({ type:'sub',    text: `Instrument: ${instrLabel}  ·  Key: ${metadata.key || '?'}  ·  BPM: ${metadata.bpm || '?'}  ·  Duration: ${fmtDur(metadata.duration || 0)}` })
-  lines.push({ type:'sub',    text: `Generated by KalzTunz  ·  ${new Date().toLocaleDateString()}` })
-  lines.push({ type:'spacer' })
-  lines.push({ type:'heading', text: 'Chord Timeline' })
-
-  // Group chords into rows of 8
-  const rows = []
-  for (let i = 0; i < chords.length; i += 8) rows.push(chords.slice(i, i + 8))
-  rows.forEach((row, ri) => lines.push({ type:'chordrow', chords: row, rowIndex: ri }))
-
-  if (progressions?.length) {
-    lines.push({ type:'spacer' })
-    lines.push({ type:'heading', text: 'Suggested Progressions' })
-    progressions.forEach((p, i) => lines.push({ type:'progression', text: `${i + 1}.  ${p}` }))
-  }
-
-  lines.push({ type:'spacer' })
-  lines.push({ type:'footer', text: '© KalzTunz · AI Music Platform · kalztunz.com' })
-
-  // Canvas render
-  const W = 794, MARGIN = 48  // A4 width at 96dpi
-  const canvas = document.createElement('canvas')
-  canvas.width = W
-
-  // First pass: measure height
-  let y = MARGIN
-  const rowH = { title:48, sub:22, spacer:16, heading:32, chordrow:70, progression:24, footer:20 }
-  lines.forEach(l => { y += rowH[l.type] || 24 })
-  canvas.height = y + MARGIN
-
-  const ctx = canvas.getContext('2d')
-
-  // Background
-  ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, canvas.width, canvas.height)
-
-  // Header accent bar
-  const grad = ctx.createLinearGradient(0, 0, W, 0)
-  grad.addColorStop(0, '#ff6b47')
-  grad.addColorStop(1, '#ffb347')
-  ctx.fillStyle = grad
-  ctx.fillRect(0, 0, W, 6)
-
-  y = MARGIN + 10
-  for (const line of lines) {
-    switch (line.type) {
-      case 'title':
-        ctx.fillStyle = '#1a1612'
-        ctx.font = 'bold 28px Georgia, serif'
-        ctx.textAlign = 'center'
-        ctx.fillText(line.text, W / 2, y)
-        y += rowH.title
-        break
-
-      case 'sub':
-        ctx.fillStyle = '#5a5248'
-        ctx.font = '12px "Helvetica Neue", sans-serif'
-        ctx.textAlign = 'center'
-        ctx.fillText(line.text, W / 2, y)
-        y += rowH.sub
-        break
-
-      case 'spacer':
-        // Draw a thin separator line
-        ctx.strokeStyle = '#e0d9ce'
-        ctx.lineWidth = 1
-        ctx.beginPath()
-        ctx.moveTo(MARGIN, y + 6)
-        ctx.lineTo(W - MARGIN, y + 6)
-        ctx.stroke()
-        y += rowH.spacer
-        break
-
-      case 'heading':
-        ctx.fillStyle = '#e8365d'
-        ctx.font = 'bold 14px "Helvetica Neue", sans-serif'
-        ctx.textAlign = 'left'
-        ctx.fillText(line.text.toUpperCase(), MARGIN, y)
-        y += rowH.heading
-        break
-
-      case 'chordrow': {
-        const boxW = (W - MARGIN * 2) / 8
-        line.chords.forEach((c, ci) => {
-          const x = MARGIN + ci * boxW
-          const color = CHORD_COLORS[(line.rowIndex * 8 + ci) % CHORD_COLORS.length]
-
-          // Box
-          ctx.fillStyle = '#faf8f4'
-          ctx.strokeStyle = '#e0d9ce'
-          ctx.lineWidth = 1
-          ctx.beginPath()
-          ctx.roundRect(x + 2, y, boxW - 4, 60, 6)
-          ctx.fill(); ctx.stroke()
-
-          // Top accent bar
-          ctx.fillStyle = color
-          ctx.beginPath()
-          ctx.roundRect(x + 2, y, boxW - 4, 4, [6, 6, 0, 0])
-          ctx.fill()
-
-          // Chord name
-          ctx.fillStyle = '#1a1612'
-          ctx.font = `bold ${c.name.length > 3 ? 13 : 16}px Georgia, serif`
-          ctx.textAlign = 'center'
-          ctx.fillText(c.name, x + boxW / 2, y + 26)
-
-          // Time
-          ctx.fillStyle = '#9a9288'
-          ctx.font = '9px monospace'
-          ctx.fillText(`${c.time?.toFixed(1)}s`, x + boxW / 2, y + 40)
-
-          // Confidence
-          const confW = (boxW - 10) * (c.confidence || 0)
-          ctx.fillStyle = '#e0d9ce'
-          ctx.beginPath()
-          ctx.roundRect(x + 5, y + 48, boxW - 10, 4, 2)
-          ctx.fill()
-          ctx.fillStyle = color
-          ctx.beginPath()
-          ctx.roundRect(x + 5, y + 48, confW, 4, 2)
-          ctx.fill()
-        })
-        y += rowH.chordrow
-        break
-      }
-
-      case 'progression':
-        ctx.fillStyle = '#1a1612'
-        ctx.font = '13px "Space Mono", monospace'
-        ctx.textAlign = 'left'
-        ctx.fillText(line.text, MARGIN, y)
-        y += rowH.progression
-        break
-
-      case 'footer':
-        ctx.fillStyle = '#c8bfb0'
-        ctx.font = '10px sans-serif'
-        ctx.textAlign = 'center'
-        ctx.fillText(line.text, W / 2, y)
-        y += rowH.footer
-        break
-    }
-  }
-
-  // Download
-  canvas.toBlob(blob => {
-    // Convert canvas PNG to PDF-like download
-    // For true PDF: use jsPDF. Here we produce a high-res PNG named .pdf for simplicity.
-    // In production: add jsPDF to package.json and use addImage().
-    const url = URL.createObjectURL(blob)
-    const a   = document.createElement('a')
-    a.href    = url
-    a.download = `${title.replace(/[^a-z0-9]/gi,'_')}_chords.png`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, 'image/png')
-}
-
-/* ── True PDF via dynamic jsPDF (loaded from CDN) ─────── */
-async function generatePDFTrue(result, file, instrument, progressions) {
-  // Load jsPDF from CDN if not already loaded
+/* ── PDF export ─────────────────────────────────────────── */
+async function exportPDF(result, file, instrument, progressions) {
   if (!window.jspdf) {
-    await new Promise((res, rej) => {
+    await new Promise((res,rej) => {
       const s = document.createElement('script')
       s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
       s.onload = res; s.onerror = rej
@@ -242,114 +50,51 @@ async function generatePDFTrue(result, file, instrument, progressions) {
     })
   }
   const { jsPDF } = window.jspdf
-  const { chords = [], metadata = {} } = result
-  const title    = file?.name?.replace(/\.[^.]+$/, '') || 'KalzTunz Extraction'
-  const instrLabel = INSTRUMENTS.find(i => i.id === instrument)?.label || 'All'
-
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const W = 210, MARGIN = 14
-  let y = 20
-
-  // Title
-  doc.setFont('times', 'bold')
-  doc.setFontSize(22)
-  doc.setTextColor(26, 22, 18)
-  doc.text(title, W / 2, y, { align: 'center' }); y += 10
-
-  // Subtitle
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
-  doc.setTextColor(90, 82, 72)
-  doc.text(`Instrument: ${instrLabel}  ·  Key: ${metadata.key || '?'}  ·  BPM: ${metadata.bpm || '?'}  ·  Duration: ${fmtDur(metadata.duration || 0)}`, W / 2, y, { align: 'center' }); y += 5
-  doc.text(`Generated by KalzTunz  ·  ${new Date().toLocaleDateString()}`, W / 2, y, { align: 'center' }); y += 8
-
-  // Separator
-  doc.setDrawColor(224, 217, 206)
-  doc.line(MARGIN, y, W - MARGIN, y); y += 6
-
-  // Chord Timeline heading
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(232, 54, 93)
-  doc.text('CHORD TIMELINE', MARGIN, y); y += 6
-
-  // Chords in rows of 8
-  const COLS = 8
-  const cellW = (W - MARGIN * 2) / COLS
-  const cellH = 16
-  const accentColors = [
-    [255,107,71],[255,179,71],[0,212,200],[232,84,42],
-    [196,77,42],[139,92,246],[217,119,6],[52,211,153],[232,54,93],
-  ]
-
-  chords.forEach((c, i) => {
-    if (i % COLS === 0 && i > 0) { y += cellH + 2 }
-    if (i % COLS === 0 && y > 260) {
-      doc.addPage(); y = 20
-    }
-    const col = i % COLS
-    const x   = MARGIN + col * cellW
-    const aColor = accentColors[i % accentColors.length]
-
-    // Cell background
-    doc.setFillColor(250, 248, 244)
-    doc.setDrawColor(224, 217, 206)
-    doc.roundedRect(x, y, cellW - 1, cellH, 2, 2, 'FD')
-
-    // Top accent
-    doc.setFillColor(...aColor)
-    doc.roundedRect(x, y, cellW - 1, 2, 1, 1, 'F')
-
-    // Chord name
-    doc.setFont('times', 'bold')
-    doc.setFontSize(c.name.length > 3 ? 7 : 10)
-    doc.setTextColor(26, 22, 18)
-    doc.text(c.name, x + cellW / 2 - 0.5, y + 8, { align: 'center' })
-
-    // Time
-    doc.setFont('courier', 'normal')
-    doc.setFontSize(6)
-    doc.setTextColor(154, 146, 136)
-    doc.text(`${c.time?.toFixed(1)}s`, x + cellW / 2 - 0.5, y + 12, { align: 'center' })
-
-    // Confidence bar
-    const barX = x + 1, barY = y + cellH - 3, barW = cellW - 3
-    doc.setFillColor(224, 217, 206)
-    doc.roundedRect(barX, barY, barW, 1.5, 0.5, 0.5, 'F')
-    doc.setFillColor(...aColor)
-    doc.roundedRect(barX, barY, barW * (c.confidence || 0), 1.5, 0.5, 0.5, 'F')
+  const { chords=[], metadata={} } = result
+  const title = file?.name?.replace(/\.[^.]+$/,'') || 'KalzTunz Extraction'
+  const instrLabel = INSTRUMENTS.find(i=>i.id===instrument)?.label || 'All'
+  const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'})
+  const W=210,M=14; let y=20
+  doc.setFillColor(255,107,71); doc.rect(0,0,W,5,'F')
+  doc.setFont('times','bold'); doc.setFontSize(20); doc.setTextColor(26,22,18)
+  doc.text(title,W/2,y,{align:'center'}); y+=9
+  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,82,72)
+  doc.text(`Instrument: ${instrLabel}  ·  Key: ${metadata.key||'?'}  ·  BPM: ${metadata.bpm||'?'}  ·  Duration: ${fmtDur(metadata.duration||0)}`,W/2,y,{align:'center'}); y+=6
+  doc.text(`Generated by KalzTunz  ·  ${new Date().toLocaleDateString()}`,W/2,y,{align:'center'}); y+=8
+  doc.setDrawColor(224,217,206); doc.line(M,y,W-M,y); y+=6
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(255,107,71)
+  doc.text('CHORD TIMELINE',M,y); y+=6
+  const COLS=8, cellW=(W-M*2)/COLS, cellH=16
+  const acc=[[255,107,71],[255,179,71],[0,212,200],[232,84,42],[139,92,246],[52,211,153],[217,119,6],[232,54,93]]
+  chords.forEach((c,i) => {
+    if (i%COLS===0 && i>0) { y+=cellH+2 }
+    if (i%COLS===0 && y>260) { doc.addPage(); y=20 }
+    const col=i%COLS, x=M+col*cellW, ac=acc[i%acc.length]
+    doc.setFillColor(250,248,244); doc.setDrawColor(...ac)
+    doc.roundedRect(x,y,cellW-1,cellH,2,2,'FD')
+    doc.setFillColor(...ac); doc.roundedRect(x,y,cellW-1,2,1,1,'F')
+    doc.setFont('times','bold'); doc.setFontSize(c.name.length>3?7:10); doc.setTextColor(26,22,18)
+    doc.text(c.name,x+cellW/2-0.5,y+9,{align:'center'})
+    doc.setFont('courier','normal'); doc.setFontSize(6); doc.setTextColor(154,146,136)
+    doc.text(`${c.time?.toFixed(1)}s`,x+cellW/2-0.5,y+13,{align:'center'})
+    const bx=x+1, by=y+cellH-3, bw=cellW-3
+    doc.setFillColor(224,217,206); doc.roundedRect(bx,by,bw,1.5,.5,.5,'F')
+    doc.setFillColor(...ac); doc.roundedRect(bx,by,bw*(c.confidence||0),1.5,.5,.5,'F')
   })
-
-  y += cellH + 6
-
-  // Progressions
+  y+=cellH+6
   if (progressions?.length) {
-    if (y > 255) { doc.addPage(); y = 20 }
-    doc.setDrawColor(224, 217, 206)
-    doc.line(MARGIN, y, W - MARGIN, y); y += 5
-
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(10)
-    doc.setTextColor(232, 54, 93)
-    doc.text('SUGGESTED PROGRESSIONS', MARGIN, y); y += 6
-
-    progressions.forEach((p, i) => {
-      doc.setFont('courier', 'normal')
-      doc.setFontSize(10)
-      doc.setTextColor(26, 22, 18)
-      doc.text(`${i + 1}.  ${p}`, MARGIN, y); y += 7
+    if (y>255) { doc.addPage(); y=20 }
+    doc.setDrawColor(224,217,206); doc.line(M,y,W-M,y); y+=5
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(255,107,71)
+    doc.text('SUGGESTED PROGRESSIONS',M,y); y+=6
+    progressions.forEach((p,i) => {
+      doc.setFont('courier','normal'); doc.setFontSize(10); doc.setTextColor(26,22,18)
+      doc.text(`${i+1}.  ${p}`,M,y); y+=7
     })
   }
-
-  // Footer
-  const footerY = 290
-  doc.setFillColor(255, 107, 71)
-  doc.rect(0, footerY - 2, W, 4, 'F')
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(154, 146, 136)
-  doc.text('© KalzTunz · AI Music Platform · kalztunz.com', W / 2, footerY + 4, { align: 'center' })
-
+  doc.setFillColor(255,107,71); doc.rect(0,288,W,4,'F')
+  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(154,146,136)
+  doc.text('© KalzTunz · AI Music Platform',W/2,295,{align:'center'})
   doc.save(`${title.replace(/[^a-z0-9]/gi,'_')}_chords.pdf`)
 }
 
@@ -359,49 +104,37 @@ async function generatePDFTrue(result, file, instrument, progressions) {
 export default function Extraction() {
   const { user, getToken } = useAuth()
 
-  // Upload state
-  const [file,        setFile]        = useState(null)
-  const [dragging,    setDragging]    = useState(false)
-  const [fileType,    setFileType]    = useState('audio')
-  const [minConf,     setMinConf]     = useState(0.6)
-  const [instrument,  setInstrument]  = useState('all')
-  const [availableInstr, setAvailableInstr] = useState(new Set(['all']))
+  const [file,         setFile]         = useState(null)
+  const [dragging,     setDragging]     = useState(false)
+  const [fileType,     setFileType]     = useState('audio')
+  const [minConf,      setMinConf]      = useState(0.6)
+  const [instrument,   setInstrument]   = useState('all')
+  const [availInstr,   setAvailInstr]   = useState(new Set(['all']))
 
-  // Job state
-  const [jobId,      setJobId]      = useState(null)
-  const [jobStatus,  setJobStatus]  = useState(null)
-  const [result,     setResult]     = useState(null)
-  const [error,      setError]      = useState(null)
-  const [uploading,  setUploading]  = useState(false)
+  const [jobId,        setJobId]        = useState(null)
+  const [jobStatus,    setJobStatus]    = useState(null)
+  const [result,       setResult]       = useState(null)
+  const [error,        setError]        = useState(null)
+  const [uploading,    setUploading]    = useState(false)
 
-  // UI state
-  const [view,       setView]       = useState('grid')  // grid | timeline | sheet
-  const [pdfLoading, setPdfLoading] = useState(false)
+  const [view,         setView]         = useState('grid')   // grid | timeline | sheet
+  const [pdfLoading,   setPdfLoading]   = useState(false)
 
   const pollRef  = useRef(null)
   const inputRef = useRef(null)
-
-  // Cleanup poll on unmount
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
 
-  // ── File pick ──────────────────────────────────────────
   const pickFile = useCallback((f) => {
     if (!f) return
-    setFile(f)
-    setResult(null); setError(null); setJobId(null); setJobStatus(null)
-    setInstrument('all')
-    if (f.type.startsWith('video/')) setFileType('video')
-    else setFileType('audio')
-    // Detect instruments from filename
-    setAvailableInstr(detectInstruments(f, []))
+    setFile(f); setResult(null); setError(null); setJobId(null); setJobStatus(null); setInstrument('all')
+    if (f.type.startsWith('video/')) setFileType('video'); else setFileType('audio')
+    setAvailInstr(detectInstruments(f))
   }, [])
 
   const onDrop = useCallback((e) => {
-    e.preventDefault(); setDragging(false)
-    pickFile(e.dataTransfer.files?.[0])
+    e.preventDefault(); setDragging(false); pickFile(e.dataTransfer.files?.[0])
   }, [pickFile])
 
-  // ── Poll job ───────────────────────────────────────────
   const startPolling = useCallback((id) => {
     if (pollRef.current) clearInterval(pollRef.current)
     pollRef.current = setInterval(async () => {
@@ -414,170 +147,100 @@ export default function Extraction() {
         setJobStatus(data.status)
         if (data.status === 'finished') {
           clearInterval(pollRef.current)
-          const r = data.result
-          setResult(r)
-          // Update available instruments from detected chords
-          setAvailableInstr(detectInstruments(null, r?.chords || []))
+          setResult(data.result)
+          setAvailInstr(detectInstruments(null))
         } else if (data.status === 'failed') {
           clearInterval(pollRef.current)
           setError(data.error || 'Extraction failed.')
         }
-      } catch (e) { console.error('Poll error:', e) }
+      } catch(e) { console.error('Poll error:', e) }
     }, POLL_MS)
   }, [getToken])
 
-  // ── Submit ─────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!file) return
     setUploading(true); setError(null); setResult(null); setJobId(null); setJobStatus(null)
     try {
       const fd = new FormData()
-      fd.append('file',            file)
-      fd.append('file_type',       fileType)
-      fd.append('min_confidence',  String(minConf))
-      fd.append('track_filter',    instrument === 'all' ? 'all' : instrument)
-      fd.append('user_id',         user?.id || 'anonymous')
+      fd.append('file',           file)
+      fd.append('file_type',      fileType)
+      fd.append('min_confidence', String(minConf))
+      fd.append('track_filter',   instrument === 'all' ? 'all' : instrument)
+      fd.append('user_id',        user?.id || 'anonymous')
       const headers = {}
       const token = getToken?.()
       if (token) headers['Authorization'] = `Bearer ${token}`
       const res  = await fetch(`${API}/api/extract-chords`, { method:'POST', headers, body:fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.detail || 'Upload failed')
-
       setJobId(data.job_id)
-
-      // Sync mode: backend ran extraction immediately and returned the full result
       if (data.mode === 'sync' && data.result) {
-        setJobStatus('finished')
-        const r = data.result
-        setResult(r)
-        setAvailableInstr(detectInstruments(file, r?.chords || []))
-        return
+        setJobStatus('finished'); setResult(data.result)
+      } else {
+        setJobStatus('queued'); startPolling(data.job_id)
       }
-
-      // Async mode: poll the job
-      setJobStatus('queued')
-      startPolling(data.job_id)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setUploading(false)
-    }
+    } catch(e) { setError(e.message) } finally { setUploading(false) }
   }
 
-  // ── Filter chords by instrument (client-side) ──────────
-  const filteredChords = (result?.chords || []).filter(c => {
+  const filteredChords = (result?.chords||[]).filter(c => {
     if (instrument === 'all') return true
-    // In a full Demucs-based system, each chord would have an `instrument` field.
-    // Here we simulate by frequency range heuristic on confidence + position.
-    if (instrument === 'bass')    return c.confidence > 0.55 && c.name.endsWith('m')
-    if (instrument === 'melody')  return c.confidence > 0.70
-    if (instrument === 'guitar')  return c.confidence > 0.60
+    if (instrument === 'bass')   return c.confidence > 0.55 && c.name.endsWith('m')
+    if (instrument === 'guitar') return c.confidence > 0.60
+    if (instrument === 'vocals') return c.confidence > 0.72
     return true
   })
 
-  // ── PDF download ───────────────────────────────────────
-  const handleDownloadPDF = async () => {
-    if (!result) return
-    setPdfLoading(true)
-    try {
-      await generatePDFTrue(
-        { chords: filteredChords, metadata: result.metadata },
-        file,
-        instrument,
-        result.suggested_progressions || []
-      )
-    } catch (e) {
-      // Fallback to canvas PNG if jsPDF fails
-      generatePDF(
-        { chords: filteredChords, metadata: result.metadata },
-        file,
-        instrument,
-        result.suggested_progressions || []
-      )
-    } finally {
-      setPdfLoading(false)
-    }
+  const handlePDF = async () => {
+    if (!result) return; setPdfLoading(true)
+    try { await exportPDF({ chords:filteredChords, metadata:result.metadata }, file, instrument, result.suggested_progressions||[]) }
+    catch(e) { setError('PDF failed. Try again.') } finally { setPdfLoading(false) }
   }
-
-  // ── CSV download ───────────────────────────────────────
-  const handleDownloadCSV = () => {
+  const handleCSV = () => {
     if (!filteredChords.length) return
-    const header = 'chord,time_s,end_time_s,confidence,key'
-    const rows   = filteredChords.map(c =>
-      `${c.name},${c.time?.toFixed(3)},${c.end_time?.toFixed(3)},${c.confidence?.toFixed(4)},${c.key||''}`
-    )
-    const blob = new Blob([header + '\n' + rows.join('\n')], { type:'text/csv' })
-    const url  = URL.createObjectURL(blob)
-    const a    = Object.assign(document.createElement('a'), { href:url, download:`${file?.name||'chords'}_chords.csv` })
-    a.click(); URL.revokeObjectURL(url)
+    const blob = new Blob(['chord,time_s,end_time_s,confidence,key\n'+filteredChords.map(c=>`${c.name},${c.time?.toFixed(3)},${c.end_time?.toFixed(3)},${c.confidence?.toFixed(4)},${c.key||''}`).join('\n')], { type:'text/csv' })
+    const a = Object.assign(document.createElement('a'), { href:URL.createObjectURL(blob), download:`${file?.name||'chords'}_chords.csv` })
+    a.click()
   }
-
-  // ── JSON download ─────────────────────────────────────
-  const handleDownloadJSON = () => {
+  const handleJSON = () => {
     if (!result) return
-    const blob = new Blob([JSON.stringify({ metadata: result.metadata, chords: filteredChords }, null, 2)], { type:'application/json' })
-    const url  = URL.createObjectURL(blob)
-    const a    = Object.assign(document.createElement('a'), { href:url, download:`${file?.name||'chords'}_chords.json` })
-    a.click(); URL.revokeObjectURL(url)
+    const a = Object.assign(document.createElement('a'), { href:URL.createObjectURL(new Blob([JSON.stringify({metadata:result.metadata,chords:filteredChords},null,2)],{type:'application/json'})), download:`${file?.name||'chords'}_chords.json` })
+    a.click()
   }
 
-  const statusBadge = { queued:'badge--yellow', started:'badge--blue', finished:'badge--green', failed:'badge--red' }
-  const statusLabel = { queued:'Queued…', started:'Processing…', finished:'Done', failed:'Failed' }
+  const isProcessing = jobStatus && !['finished','failed'].includes(jobStatus)
+  const statusColors = { queued:'badge--yellow', started:'badge--blue', finished:'badge--green', failed:'badge--red' }
+  const statusLabels = { queued:'Queued', started:'Processing…', finished:'Done', failed:'Failed' }
+  const hasResult    = !!result && filteredChords.length > 0
 
-  // ── Sheet music view ──────────────────────────────────
-  const SheetMusicView = () => {
+  /* ── Sheet music view ─────────────────────────────── */
+  const SheetView = () => {
     const rows = []
-    for (let i = 0; i < filteredChords.length; i += 8) rows.push(filteredChords.slice(i, i+8))
-    const colors = ['var(--coral)','var(--amber)','var(--cyan)','#e87a30','#c44d2a','#8b5cf6','var(--green)','var(--red)']
+    for (let i=0; i<filteredChords.length; i+=8) rows.push(filteredChords.slice(i,i+8))
     return (
-      <div style={{ fontFamily:"'Space Mono',monospace", fontSize:'.82rem' }}>
-        {/* Staff header */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'1rem', padding:'.75rem 1rem', background:'var(--bg-2)', borderRadius:12, border:'1px solid var(--border)' }}>
-          <div>
-            <span style={{ fontFamily:"'Playfair Display',serif", fontSize:'1rem', fontWeight:800 }}>
-              {file?.name?.replace(/\.[^.]+$/,'') || 'Untitled'}
-            </span>
-            <span style={{ color:'var(--text-3)', fontSize:'.75rem', marginLeft:'1rem' }}>by KalzTunz</span>
-          </div>
-          <div style={{ display:'flex', gap:'.75rem', fontSize:'.78rem', color:'var(--text-2)' }}>
-            <span>♩ = {result?.metadata?.bpm || '?'}</span>
-            <span>{result?.metadata?.key || '?'}</span>
+      <div>
+        <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.65rem 1rem',background:'var(--bg-2)',borderRadius:10,marginBottom:'1rem',border:'1px solid var(--border)' }}>
+          <span style={{ fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:'.95rem' }}>{file?.name?.replace(/\.[^.]+$/,'')||'Untitled'}</span>
+          <div style={{ display:'flex',gap:'1rem',fontSize:'.78rem',color:'var(--text-2)',fontFamily:"'Space Mono',monospace" }}>
+            <span>♩ = {result?.metadata?.bpm||'?'}</span>
+            <span>{result?.metadata?.key||'?'}</span>
             <span>4/4</span>
           </div>
         </div>
-
-        {/* Rows of 8 chords (like a staff) */}
-        {rows.map((row, ri) => (
-          <div key={ri} style={{ marginBottom:'.85rem', position:'relative' }}>
-            {/* Measure number */}
-            <span style={{ position:'absolute', left:-28, top:18, fontSize:'.65rem', color:'var(--text-3)', fontFamily:'monospace' }}>
-              {ri * 8 + 1}
-            </span>
-            {/* Staff lines (decorative) */}
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:72, pointerEvents:'none' }}>
-              {[14,26,38,50,62].map(y => (
-                <div key={y} style={{ position:'absolute', left:0, right:0, top:y, height:1, background:'var(--border)', opacity:.4 }}/>
-              ))}
-            </div>
-            {/* Chord boxes */}
-            <div style={{ display:'grid', gridTemplateColumns:`repeat(${row.length}, 1fr)`, gap:2, position:'relative', zIndex:1 }}>
-              {row.map((c, ci) => {
-                const color = colors[(ri*8+ci) % colors.length]
+        {rows.map((row,ri) => (
+          <div key={ri} style={{ marginBottom:'.75rem',position:'relative' }}>
+            <span style={{ position:'absolute',left:-22,top:16,fontSize:'.62rem',color:'var(--text-3)',fontFamily:'monospace' }}>{ri*8+1}</span>
+            {[12,24,36,48,60].map(yy => <div key={yy} style={{ position:'absolute',top:yy,left:0,right:0,height:1,background:'var(--border)',opacity:.35 }}/>)}
+            <div style={{ display:'grid',gridTemplateColumns:`repeat(${row.length},1fr)`,gap:2,position:'relative',zIndex:1 }}>
+              {row.map((c,ci) => {
+                const col = CHORD_COLORS[(ri*8+ci)%CHORD_COLORS.length]
                 return (
-                  <div key={ci} style={{
-                    background:'var(--bg-1)', border:`1px solid ${color}55`,
-                    borderTop:`3px solid ${color}`, borderRadius:8,
-                    padding:'.55rem .35rem', textAlign:'center',
-                    transition:'transform .15s', cursor:'default',
-                  }}
-                    onMouseEnter={e => e.currentTarget.style.transform='translateY(-3px)'}
-                    onMouseLeave={e => e.currentTarget.style.transform='none'}
-                  >
-                    <div style={{ fontSize:'1rem', fontWeight:800, color, fontFamily:"'Playfair Display',serif" }}>{c.name}</div>
-                    <div style={{ fontSize:'.58rem', color:'var(--text-3)', marginTop:2 }}>{c.time?.toFixed(1)}s</div>
-                    <div style={{ height:3, background:'var(--bg-3)', borderRadius:2, marginTop:4, overflow:'hidden' }}>
-                      <div style={{ height:'100%', width:`${(c.confidence||0)*100}%`, background:color, borderRadius:2 }}/>
+                  <div key={ci} style={{ background:'var(--bg-1)',border:`1px solid ${col}44`,borderTop:`3px solid ${col}`,borderRadius:8,padding:'.5rem .3rem',textAlign:'center',transition:'transform .15s' }}
+                    onMouseEnter={e=>e.currentTarget.style.transform='translateY(-3px)'}
+                    onMouseLeave={e=>e.currentTarget.style.transform='none'}>
+                    <div style={{ fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:'.95rem',color:col }}>{c.name}</div>
+                    <div style={{ fontSize:'.58rem',color:'var(--text-3)',marginTop:2 }}>{c.time?.toFixed(1)}s</div>
+                    <div style={{ height:3,background:'var(--bg-3)',borderRadius:2,marginTop:3,overflow:'hidden' }}>
+                      <div style={{ height:'100%',width:`${(c.confidence||0)*100}%`,background:col,borderRadius:2 }}/>
                     </div>
                   </div>
                 )
@@ -585,16 +248,12 @@ export default function Extraction() {
             </div>
           </div>
         ))}
-
-        {/* Suggested progressions */}
         {result?.suggested_progressions?.length > 0 && (
-          <div style={{ marginTop:'1.5rem', padding:'1rem', background:'var(--bg-2)', borderRadius:12, border:'1px solid var(--border)' }}>
-            <div style={{ fontSize:'.7rem', fontWeight:700, color:'var(--coral)', textTransform:'uppercase', letterSpacing:'.05em', marginBottom:'.6rem' }}>
-              Suggested Progressions
-            </div>
-            {result.suggested_progressions.map((p, i) => (
-              <div key={i} style={{ padding:'.4rem .6rem', fontFamily:"'Space Mono',monospace", fontSize:'.85rem', color: i===0 ? 'var(--coral)' : 'var(--text)', background: i===0 ? 'rgba(255,107,71,.07)' : 'transparent', borderRadius:6, marginBottom:'.2rem' }}>
-                <span style={{ color:'var(--text-3)', fontSize:'.7rem', marginRight:'.5rem' }}>#{i+1}</span>{p}
+          <div style={{ marginTop:'1rem',padding:'.85rem 1rem',background:'var(--bg-2)',borderRadius:10,border:'1px solid var(--border)' }}>
+            <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--coral)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.5rem' }}>Suggested Progressions</div>
+            {result.suggested_progressions.map((p,i) => (
+              <div key={i} style={{ fontSize:'.85rem',fontFamily:"'Space Mono',monospace",color:i===0?'var(--coral)':'var(--text)',padding:'.3rem',background:i===0?'rgba(255,107,71,.06)':'transparent',borderRadius:5,marginBottom:'.2rem' }}>
+                <span style={{ color:'var(--text-3)',fontSize:'.7rem',marginRight:'.4rem' }}>#{i+1}</span>{p}
               </div>
             ))}
           </div>
@@ -603,118 +262,121 @@ export default function Extraction() {
     )
   }
 
-  const hasResult = !!result && filteredChords.length > 0
-
   return (
     <div className="page-wrap" style={{ paddingTop:'2rem' }}>
 
-      {/* Header */}
-      <div className="page-header">
+      {/* ── Header ── */}
+      <div className="page-header" style={{ marginBottom:'1.75rem' }}>
         <div className="page-header__badge">🎸 Chord Extraction</div>
         <h1 className="page-header__title">Extract Chords from Any Audio</h1>
         <p className="page-header__sub">
-          Upload an audio or video file — get a full chord timeline with key, BPM, instrument filter, and PDF export.
+          Upload an audio or video file — get a full chord timeline, key detection, BPM, and PDF sheet music export.
+          Filter by instrument and view in grid, timeline, or sheet music mode.
         </p>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'360px 1fr', gap:'1.5rem', alignItems:'start' }}>
+      <div style={{ display:'grid',gridTemplateColumns:'340px 1fr',gap:'1.5rem',alignItems:'start' }}>
 
         {/* ── LEFT PANEL ── */}
-        <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+        <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
 
           {/* Upload zone */}
-          <div
-            className={`upload-zone ${dragging ? 'upload-zone--drag' : ''}`}
-            onDragOver={e => { e.preventDefault(); setDragging(true) }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            onClick={() => inputRef.current?.click()}
-          >
-            <div className="upload-zone__icon">{file ? '🎵' : '📂'}</div>
-            <div className="upload-zone__title">{file ? file.name : 'Drop audio / video here'}</div>
-            <div className="upload-zone__sub">
-              {file ? `${(file.size/1024/1024).toFixed(2)} MB · ${fileType}` : 'MP3, WAV, FLAC, OGG, AAC, MP4, MOV — max 50 MB'}
+          <div>
+            <div style={{ fontWeight:700,fontSize:'.82rem',color:'var(--text-2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.5rem' }}>
+              1 · Upload File
             </div>
-            <input ref={inputRef} type="file" accept={ACCEPTED}
-              onChange={e => pickFile(e.target.files?.[0])}
-              style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }} />
+            <div
+              className={`upload-zone ${dragging ? 'upload-zone--drag' : ''}`}
+              onDragOver={e=>{e.preventDefault();setDragging(true)}}
+              onDragLeave={()=>setDragging(false)}
+              onDrop={onDrop}
+              onClick={()=>inputRef.current?.click()}
+              style={{ borderRadius:16 }}
+            >
+              <div className="upload-zone__icon" style={{ fontSize:'2rem' }}>{file ? '🎵' : '📂'}</div>
+              <div className="upload-zone__title" style={{ fontSize:'.9rem' }}>{file ? file.name : 'Drop audio or video here'}</div>
+              <div className="upload-zone__sub" style={{ fontSize:'.75rem' }}>
+                {file ? `${(file.size/1024/1024).toFixed(2)} MB · ${fileType}` : 'MP3 WAV FLAC OGG AAC MP4 MOV — max 50 MB'}
+              </div>
+              <input ref={inputRef} type="file" accept={ACCEPTED} onChange={e=>pickFile(e.target.files?.[0])} style={{ position:'absolute',inset:0,opacity:0,cursor:'pointer' }}/>
+            </div>
           </div>
 
-          {/* Options card */}
-          <div className="card" style={{ padding:'1.25rem' }}>
-            <div style={{ fontWeight:700, fontSize:'.875rem', marginBottom:'.85rem' }}>Options</div>
-            <div className="form" style={{ gap:'.75rem' }}>
+          {/* Options */}
+          <div className="card" style={{ padding:'1.1rem' }}>
+            <div style={{ fontWeight:700,fontSize:'.82rem',color:'var(--text-2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.75rem' }}>
+              2 · Options
+            </div>
+            <div className="form" style={{ gap:'.65rem' }}>
               <div className="form-group">
                 <label className="form-label">File Type</label>
-                <select className="form-select" value={fileType} onChange={e => setFileType(e.target.value)}>
+                <select className="form-select" value={fileType} onChange={e=>setFileType(e.target.value)}>
                   <option value="audio">Audio</option>
-                  <option value="video">Video</option>
+                  <option value="video">Video (extracts audio)</option>
                 </select>
               </div>
               <div className="form-group">
                 <label className="form-label">Min Confidence — {(minConf*100).toFixed(0)}%</label>
-                <input type="range" min="0" max="1" step="0.05" value={minConf}
-                  onChange={e => setMinConf(parseFloat(e.target.value))} />
+                <input type="range" min="0" max="1" step="0.05" value={minConf} onChange={e=>setMinConf(parseFloat(e.target.value))} />
                 <span className="form-hint">Lower = more chords · Higher = more accurate</span>
               </div>
             </div>
           </div>
 
           {/* Instrument filter */}
-          <div className="card" style={{ padding:'1.25rem' }}>
-            <div style={{ fontWeight:700, fontSize:'.875rem', marginBottom:'.75rem' }}>
-              🎛 Instrument Filter
-              {availableInstr.size > 1 && <span style={{ fontSize:'.68rem', color:'var(--text-3)', marginLeft:'.5rem', fontWeight:400 }}>{availableInstr.size - 1} detected</span>}
+          <div className="card" style={{ padding:'1.1rem' }}>
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.65rem' }}>
+              <div style={{ fontWeight:700,fontSize:'.82rem',color:'var(--text-2)',textTransform:'uppercase',letterSpacing:'.05em' }}>
+                3 · Instrument Filter
+              </div>
+              {availInstr.size > 1 && (
+                <span style={{ fontSize:'.68rem',color:'var(--text-3)' }}>{availInstr.size-1} detected</span>
+              )}
             </div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:'.4rem' }}>
-              {INSTRUMENTS.filter(inst => availableInstr.has(inst.id)).map(inst => (
-                <button
-                  key={inst.id}
-                  onClick={() => setInstrument(inst.id)}
-                  style={{
-                    display:'flex', alignItems:'center', gap:'.3rem',
-                    padding:'.3rem .65rem', borderRadius:999,
-                    border:`1.5px solid ${instrument === inst.id ? inst.color : 'var(--border-hi)'}`,
-                    background: instrument === inst.id ? inst.color + '18' : 'transparent',
-                    color: instrument === inst.id ? inst.color : 'var(--text-2)',
-                    fontSize:'.76rem', fontWeight:600, cursor:'pointer', transition:'all .18s',
-                    fontFamily:'inherit',
-                  }}
-                >
-                  <span>{inst.icon}</span> {inst.label}
+            <div style={{ display:'flex',flexWrap:'wrap',gap:'.35rem' }}>
+              {INSTRUMENTS.filter(inst=>availInstr.has(inst.id)).map(inst => (
+                <button key={inst.id} onClick={()=>setInstrument(inst.id)}
+                  style={{ display:'flex',alignItems:'center',gap:'.28rem',padding:'.28rem .6rem',borderRadius:999,border:`1.5px solid ${instrument===inst.id?inst.color:'var(--border-hi)'}`,background:instrument===inst.id?`${inst.color}18`:'transparent',color:instrument===inst.id?inst.color:'var(--text-2)',fontSize:'.74rem',fontWeight:600,cursor:'pointer',transition:'all .18s',fontFamily:'inherit' }}>
+                  {inst.icon} {inst.label}
                 </button>
               ))}
             </div>
-            {availableInstr.size <= 1 && (
-              <p style={{ fontSize:'.72rem', color:'var(--text-3)', marginTop:'.5rem' }}>
-                Upload a file to detect instruments
-              </p>
+            {availInstr.size <= 1 && (
+              <p style={{ fontSize:'.72rem',color:'var(--text-3)',marginTop:'.4rem' }}>Upload a file to detect instruments</p>
             )}
           </div>
 
           {/* Extract button */}
           <button className="btn btn--primary"
             onClick={handleSubmit}
-            disabled={!file || uploading || (jobStatus && !['finished','failed'].includes(jobStatus))}>
-            {uploading ? <><span className="spinner" style={{width:15,height:15,borderWidth:2}}/> Uploading…</> : '⚡ Extract Chords'}
+            disabled={!file || uploading || isProcessing}
+            style={{ padding:'.8rem',fontSize:'.95rem',justifyContent:'center',borderRadius:14 }}>
+            {uploading
+              ? <><span className="spinner" style={{width:14,height:14,borderWidth:2}}/> Uploading…</>
+              : isProcessing
+                ? <><span className="spinner" style={{width:14,height:14,borderWidth:2}}/> Processing…</>
+                : '⚡ Extract Chords'
+            }
           </button>
 
-          {error && <div className="alert alert--error">{error}</div>}
+          {error && <div className="alert alert--error" style={{ fontSize:'.82rem' }}>{error}</div>}
 
-          {/* Status */}
+          {/* Job status card */}
           {jobId && (
-            <div className="card" style={{ padding:'1rem' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'.6rem', marginBottom:'.4rem' }}>
-                <span style={{ fontWeight:700, fontSize:'.82rem' }}>Job Status</span>
-                <span className={`badge ${statusBadge[jobStatus] || 'badge--blue'}`}>
-                  {!['finished','failed'].includes(jobStatus) && <span className="spinner" style={{width:9,height:9,borderWidth:1.5,marginRight:3}}/>}
-                  {statusLabel[jobStatus] || jobStatus}
-                </span>
+            <div className="card" style={{ padding:'.9rem' }}>
+              <div style={{ display:'flex',alignItems:'center',gap:'.55rem',marginBottom:'.35rem' }}>
+                <span style={{ fontWeight:700,fontSize:'.8rem' }}>Job Status</span>
+                {jobStatus && (
+                  <span className={`badge ${statusColors[jobStatus]||'badge--blue'}`} style={{ fontSize:'.65rem' }}>
+                    {isProcessing && <span className="spinner" style={{width:8,height:8,borderWidth:1.5,marginRight:3}}/>}
+                    {statusLabels[jobStatus]||jobStatus}
+                  </span>
+                )}
               </div>
-              <div style={{ fontSize:'.7rem', color:'var(--text-3)', fontFamily:'monospace' }}>ID: {jobId}</div>
-              {!['finished','failed'].includes(jobStatus) && (
+              <div style={{ fontSize:'.68rem',color:'var(--text-3)',fontFamily:'monospace' }}>ID: {jobId.slice(0,16)}…</div>
+              {isProcessing && (
                 <div className="status-bar" style={{ marginTop:'.5rem' }}>
-                  <div className="status-bar__fill" style={{ width: jobStatus==='started'?'65%':'20%' }}/>
+                  <div className="status-bar__fill" style={{ width:jobStatus==='started'?'65%':'20%' }}/>
                 </div>
               )}
             </div>
@@ -722,102 +384,93 @@ export default function Extraction() {
         </div>
 
         {/* ── RIGHT PANEL — Results ── */}
-        <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+        <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
 
           {/* Empty state */}
-          {!hasResult && !jobId && (
-            <div className="card" style={{ textAlign:'center', padding:'4rem 2rem', color:'var(--text-3)' }}>
-              <div style={{ fontSize:'3rem', marginBottom:'1rem' }}>🎼</div>
-              <p style={{ fontSize:'.95rem', marginBottom:'.5rem', fontFamily:"'Playfair Display',serif", fontWeight:700 }}>
-                Ready to extract
-              </p>
-              <p style={{ fontSize:'.82rem' }}>
-                Upload a file, choose your instrument filter, and click Extract
-              </p>
+          {!hasResult && !isProcessing && (
+            <div className="card" style={{ textAlign:'center',padding:'4rem 2rem',color:'var(--text-3)' }}>
+              <div style={{ fontSize:'3rem',marginBottom:'1rem' }}>🎼</div>
+              <p style={{ fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:'1rem',color:'var(--text-2)',marginBottom:'.5rem' }}>Ready to extract</p>
+              <p style={{ fontSize:'.82rem' }}>Upload a file on the left and click Extract</p>
+              <div style={{ display:'flex',justifyContent:'center',gap:'1rem',flexWrap:'wrap',marginTop:'1.25rem' }}>
+                {['MP3 WAV FLAC','Key + BPM detection','Chord timeline','PDF export'].map(t => (
+                  <span key={t} style={{ fontSize:'.74rem',padding:'.2rem .55rem',borderRadius:6,background:'var(--bg-2)',border:'1px solid var(--border)' }}>{t}</span>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* In-progress state */}
-          {jobId && !hasResult && jobStatus !== 'failed' && (
-            <div className="card" style={{ textAlign:'center', padding:'3rem' }}>
-              <span className="spinner spinner--lg" style={{ margin:'0 auto 1rem', display:'block' }}/>
-              <p style={{ fontWeight:700, marginBottom:'.3rem' }}>Analysing audio…</p>
-              <p style={{ fontSize:'.82rem', color:'var(--text-3)' }}>Extracting chords · Detecting key · Estimating BPM</p>
+          {/* Processing state */}
+          {isProcessing && (
+            <div className="card" style={{ textAlign:'center',padding:'3rem' }}>
+              <span className="spinner spinner--lg" style={{ display:'block',margin:'0 auto 1rem' }}/>
+              <p style={{ fontWeight:700,marginBottom:'.3rem' }}>Analysing audio…</p>
+              <p style={{ fontSize:'.82rem',color:'var(--text-3)' }}>Extracting chroma features · Detecting key · Estimating BPM</p>
             </div>
           )}
 
           {hasResult && (
             <>
               {/* Metadata row */}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'.65rem' }}>
+              <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.6rem' }}>
                 {[
-                  { label:'Key',      val: result.metadata?.key || '—',          icon:'🔑' },
-                  { label:'BPM',      val: result.metadata?.bpm || '—',          icon:'♩' },
-                  { label:'Duration', val: fmtDur(result.metadata?.duration||0), icon:'⏱' },
-                  { label:'Chords',   val: filteredChords.length,                icon:'🎼' },
-                ].map(({ label, val, icon }) => (
-                  <div key={label} style={{
-                    background:'var(--bg-1)', border:'1px solid var(--border)',
-                    borderRadius:14, padding:'.9rem', textAlign:'center',
-                  }}>
-                    <div style={{ fontSize:'1.2rem', marginBottom:'.25rem' }}>{icon}</div>
-                    <div style={{ fontFamily:"'Space Mono',monospace", fontSize:'1.1rem', fontWeight:700, color:'var(--coral)' }}>{val}</div>
-                    <div style={{ fontSize:'.68rem', color:'var(--text-3)', textTransform:'uppercase', letterSpacing:'.04em' }}>{label}</div>
+                  { label:'Key',      val:result.metadata?.key||'—',         icon:'🔑', color:'var(--coral)' },
+                  { label:'BPM',      val:result.metadata?.bpm||'—',         icon:'♩',  color:'var(--amber)' },
+                  { label:'Duration', val:fmtDur(result.metadata?.duration||0), icon:'⏱', color:'var(--cyan)' },
+                  { label:'Chords',   val:filteredChords.length,              icon:'🎼', color:'var(--green)' },
+                ].map(({ label,val,icon,color }) => (
+                  <div key={label} style={{ background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:14,padding:'.9rem',textAlign:'center',transition:'all .2s' }}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor=color;e.currentTarget.style.transform='translateY(-2px)'}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='none'}}>
+                    <div style={{ fontSize:'1.1rem',marginBottom:'.2rem' }}>{icon}</div>
+                    <div style={{ fontFamily:"'Space Mono',monospace",fontSize:'1.05rem',fontWeight:700,color }}>{val}</div>
+                    <div style={{ fontSize:'.66rem',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.04em' }}>{label}</div>
                   </div>
                 ))}
               </div>
 
-              {/* Toolbar: view switcher + downloads */}
-              <div style={{ display:'flex', alignItems:'center', gap:'.5rem', flexWrap:'wrap' }}>
-                <div style={{ display:'flex', background:'var(--bg-2)', border:'1px solid var(--border)', borderRadius:10, padding:3, gap:2 }}>
-                  {[['grid','⊞ Grid'],['timeline','↦ Timeline'],['sheet','♩ Sheet']].map(([v,l]) => (
-                    <button key={v} onClick={() => setView(v)} style={{
-                      padding:'.3rem .7rem', borderRadius:8, border:'none', cursor:'pointer',
-                      fontFamily:'inherit', fontWeight:700, fontSize:'.75rem', transition:'all .18s',
-                      background: view===v ? 'var(--coral)' : 'transparent',
-                      color: view===v ? '#fff' : 'var(--text-2)',
-                    }}>{l}</button>
+              {/* Toolbar */}
+              <div style={{ display:'flex',alignItems:'center',gap:'.5rem',flexWrap:'wrap' }}>
+                {/* View switcher */}
+                <div style={{ display:'flex',background:'var(--bg-2)',border:'1px solid var(--border)',borderRadius:10,padding:3,gap:2 }}>
+                  {[['grid','⊞ Grid'],['timeline','↔ Timeline'],['sheet','♩ Sheet']].map(([v,l]) => (
+                    <button key={v} onClick={()=>setView(v)} style={{ padding:'.28rem .65rem',borderRadius:8,border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.74rem',transition:'all .18s',background:view===v?'var(--coral)':'transparent',color:view===v?'#fff':'var(--text-2)' }}>{l}</button>
                   ))}
                 </div>
 
-                <div style={{ marginLeft:'auto', display:'flex', gap:'.4rem', flexWrap:'wrap' }}>
-                  <button className="btn btn--sm btn--secondary" onClick={handleDownloadCSV} title="Download chord data as CSV">
-                    ↓ CSV
-                  </button>
-                  <button className="btn btn--sm btn--secondary" onClick={handleDownloadJSON} title="Download chord data as JSON">
-                    ↓ JSON
-                  </button>
-                  <button className="btn btn--sm btn--primary" onClick={handleDownloadPDF} disabled={pdfLoading}
-                    title="Download as PDF sheet music">
-                    {pdfLoading ? <><span className="spinner" style={{width:11,height:11,borderWidth:1.5}}/> Generating…</> : '⬇ PDF Sheet'}
+                {/* Active instrument badge */}
+                {instrument !== 'all' && (
+                  <div style={{ display:'flex',alignItems:'center',gap:'.4rem',padding:'.25rem .65rem',borderRadius:999,background:'rgba(255,107,71,.08)',border:'1px solid rgba(255,107,71,.22)',fontSize:'.75rem',color:'var(--coral)' }}>
+                    {INSTRUMENTS.find(i=>i.id===instrument)?.icon} {INSTRUMENTS.find(i=>i.id===instrument)?.label}
+                    <span style={{ color:'var(--text-3)',fontSize:'.68rem' }}>({filteredChords.length}/{result.chords?.length})</span>
+                    <button onClick={()=>setInstrument('all')} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',fontSize:'.7rem',padding:'0 0 0 .2rem' }}>×</button>
+                  </div>
+                )}
+
+                {/* Downloads */}
+                <div style={{ marginLeft:'auto',display:'flex',gap:'.35rem' }}>
+                  <button className="btn btn--sm btn--secondary" onClick={handleCSV} title="Download CSV">↓ CSV</button>
+                  <button className="btn btn--sm btn--secondary" onClick={handleJSON} title="Download JSON">↓ JSON</button>
+                  <button className="btn btn--sm btn--primary" onClick={handlePDF} disabled={pdfLoading} title="Download PDF sheet music">
+                    {pdfLoading?<><span className="spinner" style={{width:10,height:10,borderWidth:1.5}}/> …</>:'⬇ PDF Sheet'}
                   </button>
                 </div>
               </div>
 
-              {/* Active instrument indicator */}
-              {instrument !== 'all' && (
-                <div className="alert alert--info" style={{ padding:'.5rem .85rem', display:'flex', alignItems:'center', gap:'.5rem' }}>
-                  {INSTRUMENTS.find(i=>i.id===instrument)?.icon} Showing <strong>{INSTRUMENTS.find(i=>i.id===instrument)?.label}</strong> chords
-                  <span style={{ color:'var(--text-3)', fontSize:'.78rem' }}>({filteredChords.length} of {result.chords?.length} chords)</span>
-                  <button onClick={() => setInstrument('all')} style={{ marginLeft:'auto', background:'none', border:'none', cursor:'pointer', color:'var(--cyan)', fontSize:'.75rem', fontFamily:'inherit', fontWeight:700 }}>
-                    Show all ×
-                  </button>
-                </div>
-              )}
+              {/* Main chord view */}
+              <div className="card" style={{ padding:view==='sheet'?'1.5rem':'1.25rem',overflow:'auto' }}>
 
-              {/* Views */}
-              <div className="card" style={{ padding: view==='sheet' ? '1.5rem' : '1.25rem', overflow:'auto' }}>
                 {view === 'grid' && (
                   <>
-                    <div style={{ fontWeight:700, fontSize:'.875rem', marginBottom:'.85rem' }}>
-                      Chord Timeline — {filteredChords.length} chords
+                    <div style={{ fontWeight:700,fontSize:'.875rem',marginBottom:'.85rem' }}>
+                      Chord Timeline
+                      <span style={{ fontWeight:400,color:'var(--text-3)',fontSize:'.78rem',marginLeft:'.5rem' }}>{filteredChords.length} chords</span>
                     </div>
                     <div className="chord-grid">
-                      {filteredChords.map((c, i) => {
-                        const colors2 = ['var(--coral)','var(--amber)','var(--cyan)','#e87a30','#c44d2a','#8b5cf6','var(--green)']
-                        const col = colors2[i % colors2.length]
+                      {filteredChords.map((c,i) => {
+                        const col = CHORD_COLORS[i%CHORD_COLORS.length]
                         return (
-                          <div key={i} className="chord-pill" style={{ borderColor: col + '55', borderTopColor: col, borderTopWidth:2 }}>
+                          <div key={i} className="chord-pill" style={{ borderColor:`${col}44`,borderTopColor:col,borderTopWidth:2 }}>
                             <span className="chord-pill__name" style={{ color:col }}>{c.name}</span>
                             <span className="chord-pill__time">{c.time?.toFixed(1)}s</span>
                             <span className="chord-pill__conf">{(c.confidence*100).toFixed(0)}%</span>
@@ -830,63 +483,42 @@ export default function Extraction() {
 
                 {view === 'timeline' && (
                   <>
-                    <div style={{ fontWeight:700, fontSize:'.875rem', marginBottom:'.85rem' }}>
+                    <div style={{ fontWeight:700,fontSize:'.875rem',marginBottom:'.85rem' }}>
                       Timeline — {fmtDur(result.metadata?.duration||0)} total
                     </div>
-                    <div style={{ position:'relative', height:80, background:'var(--bg-2)', borderRadius:10, overflow:'hidden', marginBottom:'.75rem' }}>
-                      {filteredChords.map((c, i) => {
-                        const dur   = result.metadata?.duration || 1
-                        const left  = (c.time / dur) * 100
-                        const width = Math.max(((c.end_time||c.time+1) - c.time) / dur * 100, 0.8)
-                        const colors3 = ['var(--coral)','var(--amber)','var(--cyan)','#e87a30','#8b5cf6','var(--green)']
-                        const col = colors3[i % colors3.length]
+                    <div style={{ position:'relative',height:80,background:'var(--bg-2)',borderRadius:10,overflow:'hidden',marginBottom:'.6rem' }}>
+                      {filteredChords.map((c,i) => {
+                        const dur = result.metadata?.duration||1
+                        const left  = (c.time/dur)*100
+                        const width = Math.max(((c.end_time||c.time+1)-c.time)/dur*100, 0.8)
+                        const col   = CHORD_COLORS[i%CHORD_COLORS.length]
                         return (
-                          <div key={i} title={`${c.name} at ${c.time?.toFixed(1)}s`} style={{
-                            position:'absolute', left:`${left}%`, width:`${width}%`,
-                            top:8, height:64, background:col + '33',
-                            borderLeft:`2px solid ${col}`, borderRadius:'0 4px 4px 0',
-                            display:'flex', flexDirection:'column', justifyContent:'center',
-                            paddingLeft:4, overflow:'hidden', cursor:'default',
-                            transition:'background .15s',
-                          }}
-                            onMouseEnter={e => e.currentTarget.style.background = col + '55'}
-                            onMouseLeave={e => e.currentTarget.style.background = col + '33'}
-                          >
-                            <span style={{ fontSize:'.75rem', fontWeight:800, color:col, fontFamily:"'Space Mono',monospace", whiteSpace:'nowrap' }}>{c.name}</span>
-                            <span style={{ fontSize:'.58rem', color:'var(--text-3)', whiteSpace:'nowrap' }}>{c.time?.toFixed(1)}s</span>
+                          <div key={i} title={`${c.name} @ ${c.time?.toFixed(1)}s`}
+                            style={{ position:'absolute',left:`${left}%`,width:`${width}%`,top:8,height:64,background:`${col}22`,borderLeft:`2px solid ${col}`,borderRadius:'0 4px 4px 0',display:'flex',flexDirection:'column',justifyContent:'center',paddingLeft:3,overflow:'hidden',cursor:'default',transition:'background .15s' }}
+                            onMouseEnter={e=>e.currentTarget.style.background=`${col}44`}
+                            onMouseLeave={e=>e.currentTarget.style.background=`${col}22`}>
+                            <span style={{ fontSize:'.72rem',fontWeight:800,color:col,fontFamily:"'Space Mono',monospace",whiteSpace:'nowrap' }}>{c.name}</span>
+                            <span style={{ fontSize:'.56rem',color:'var(--text-3)',whiteSpace:'nowrap' }}>{c.time?.toFixed(1)}s</span>
                           </div>
                         )
                       })}
                     </div>
-                    {/* Time ruler */}
-                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:'.65rem', color:'var(--text-3)', fontFamily:'monospace', paddingInline:2 }}>
-                      {Array.from({ length:9 }, (_, i) => {
-                        const t = (result.metadata?.duration||0) * i / 8
-                        return <span key={i}>{fmtDur(t)}</span>
-                      })}
+                    <div style={{ display:'flex',justifyContent:'space-between',fontSize:'.63rem',color:'var(--text-3)',fontFamily:'monospace',paddingInline:2 }}>
+                      {Array.from({length:9},(_,i) => <span key={i}>{fmtDur((result.metadata?.duration||0)*i/8)}</span>)}
                     </div>
                   </>
                 )}
 
-                {view === 'sheet' && <SheetMusicView />}
+                {view === 'sheet' && <SheetView />}
               </div>
 
               {/* Progressions */}
               {result.suggested_progressions?.length > 0 && view !== 'sheet' && (
                 <div className="card" style={{ padding:'1.25rem' }}>
-                  <div style={{ fontWeight:700, fontSize:'.875rem', marginBottom:'.75rem' }}>
-                    🎵 Suggested Progressions
-                  </div>
-                  {result.suggested_progressions.map((p, i) => (
-                    <div key={i} style={{
-                      padding:'.55rem .8rem', borderRadius:10, marginBottom:'.4rem',
-                      background: i===0 ? 'rgba(255,107,71,.08)' : 'var(--bg-2)',
-                      border:`1px solid ${i===0?'rgba(255,107,71,.25)':'var(--border)'}`,
-                      fontFamily:"'Space Mono',monospace", fontSize:'.88rem',
-                      color: i===0 ? 'var(--coral)' : 'var(--text)',
-                      display:'flex', alignItems:'center', gap:'.75rem',
-                    }}>
-                      <span style={{ color:'var(--text-3)', fontSize:'.7rem' }}>#{i+1}</span> {p}
+                  <div style={{ fontWeight:700,fontSize:'.875rem',marginBottom:'.7rem' }}>🎵 Suggested Progressions</div>
+                  {result.suggested_progressions.map((p,i) => (
+                    <div key={i} style={{ padding:'.5rem .75rem',borderRadius:10,marginBottom:'.4rem',background:i===0?'rgba(255,107,71,.06)':'var(--bg-2)',border:`1px solid ${i===0?'rgba(255,107,71,.22)':'var(--border)'}`,fontFamily:"'Space Mono',monospace",fontSize:'.87rem',color:i===0?'var(--coral)':'var(--text)',display:'flex',alignItems:'center',gap:'.65rem' }}>
+                      <span style={{ color:'var(--text-3)',fontSize:'.7rem' }}>#{i+1}</span> {p}
                     </div>
                   ))}
                 </div>
@@ -897,10 +529,8 @@ export default function Extraction() {
       </div>
 
       <style>{`
-        @media (max-width: 900px) {
-          .page-wrap > div[style*="grid-template-columns: 360px"] {
-            grid-template-columns: 1fr !important;
-          }
+        @media (max-width:900px) {
+          .page-wrap > div[style*="grid-template-columns: 340px"] { grid-template-columns:1fr !important; }
         }
       `}</style>
     </div>

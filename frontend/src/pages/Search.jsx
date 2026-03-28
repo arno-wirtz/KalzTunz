@@ -54,15 +54,30 @@ const TRENDING = {
 
 /* ── Moods ────────────────────────────────────────────────── */
 const MOODS = [
-  { key:'happy',     label:'Happy',     emoji:'😊', color:'#f59e0b' },
-  { key:'sad',       label:'Sad',       emoji:'😢', color:'#7c5ce7' },
-  { key:'energetic', label:'Energetic', emoji:'⚡', color:'#ef4444' },
-  { key:'chill',     label:'Chill',     emoji:'😌', color:'#00d4aa' },
-  { key:'romantic',  label:'Romantic',  emoji:'💕', color:'#ec4899' },
-  { key:'focus',     label:'Focus',     emoji:'🎯', color:'#8b5cf6' },
-  { key:'dark',      label:'Dark',      emoji:'🌑', color:'#64748b' },
-  { key:'epic',      label:'Epic',      emoji:'🔥', color:'#dc2626' },
-  { key:'morning',   label:'Morning',   emoji:'🌅', color:'#f97316' },
+  { key:'happy',     label:'Happy',     emoji:'😊', color:'#f59e0b', bg:'rgba(245,158,11,.12)' },
+  { key:'sad',       label:'Sad',       emoji:'😢', color:'#7c5ce7', bg:'rgba(124,92,231,.12)' },
+  { key:'energetic', label:'Energetic', emoji:'⚡', color:'#ef4444', bg:'rgba(239,68,68,.12)' },
+  { key:'chill',     label:'Chill',     emoji:'😌', color:'#00d4aa', bg:'rgba(0,212,170,.12)' },
+  { key:'romantic',  label:'Romantic',  emoji:'💕', color:'#ec4899', bg:'rgba(236,72,153,.12)' },
+  { key:'focus',     label:'Focus',     emoji:'🎯', color:'#8b5cf6', bg:'rgba(139,92,246,.12)' },
+  { key:'dark',      label:'Dark',      emoji:'🌑', color:'#64748b', bg:'rgba(100,116,139,.12)' },
+  { key:'epic',      label:'Epic',      emoji:'🔥', color:'#dc2626', bg:'rgba(220,38,38,.12)' },
+  { key:'morning',   label:'Morning',   emoji:'🌅', color:'#f97316', bg:'rgba(249,115,22,.12)' },
+]
+
+const GENRE_BROWSE = [
+  { label:'Pop',        emoji:'🎤', color:'#f59e0b', query:'pop hits' },
+  { label:'Hip-Hop',    emoji:'🎧', color:'#8b5cf6', query:'hip hop' },
+  { label:'Rock',       emoji:'🎸', color:'#ef4444', query:'rock anthems' },
+  { label:'Jazz',       emoji:'🎷', color:'#d4a017', query:'jazz piano' },
+  { label:'R&B',        emoji:'💜', color:'#ec4899', query:'rnb soul' },
+  { label:'Electronic', emoji:'🎛️', color:'#00d4aa', query:'electronic dance' },
+  { label:'Classical',  emoji:'🎻', color:'#6366f1', query:'classical orchestra' },
+  { label:'Indie',      emoji:'🌿', color:'#22c55e', query:'indie alternative' },
+  { label:'Country',    emoji:'🤠', color:'#d97706', query:'country hits' },
+  { label:'Afrobeats',  emoji:'🥁', color:'#f97316', query:'afrobeats' },
+  { label:'Latin',      emoji:'💃', color:'#f43f5e', query:'latin reggaeton' },
+  { label:'K-Pop',      emoji:'⭐', color:'#a855f7', query:'kpop' },
 ]
 
 const SEARCH_TYPES = [
@@ -758,14 +773,45 @@ export default function Search() {
         )}
       </div>
 
+      {/* ── Mood + Genre browse ── */}
+      {!query && (
+        <div style={{ marginBottom:'1.5rem' }}>
+          {/* Genre grid */}
+          <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.6rem' }}>
+            🎵 Browse by Genre
+          </div>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))',gap:'.5rem',marginBottom:'1.25rem' }}>
+            {GENRE_BROWSE.map(g => (
+              <button key={g.label} onClick={() => { setInputVal(g.query); executeSearch(g.query) }}
+                style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.3rem',padding:'.65rem .4rem',borderRadius:12,border:`1.5px solid ${g.color}33`,background:`${g.color}10`,cursor:'pointer',fontFamily:'inherit',transition:'all .2s',color:'var(--text)' }}
+                onMouseEnter={e=>{ e.currentTarget.style.background=`${g.color}22`; e.currentTarget.style.borderColor=g.color; e.currentTarget.style.transform='translateY(-2px)' }}
+                onMouseLeave={e=>{ e.currentTarget.style.background=`${g.color}10`; e.currentTarget.style.borderColor=`${g.color}33`; e.currentTarget.style.transform='none' }}>
+                <span style={{ fontSize:'1.3rem' }}>{g.emoji}</span>
+                <span style={{ fontSize:'.72rem',fontWeight:700,color:g.color }}>{g.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Mood strip ── */}
       <div style={{ marginBottom:'1.25rem' }}>
-        <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.5rem' }}>🎭 Browse by Mood</div>
+        <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.55rem' }}>🎭 Browse by Mood</div>
         <div style={{ display:'flex',gap:'.4rem',flexWrap:'wrap' }}>
           {MOODS.map(m => (
-            <button key={m.key} className={`mood-chip ${activeMood===m.key?'active':''}`}
-              style={{ ...(activeMood===m.key ? { background:m.color,color:'#fff',borderColor:m.color } : {}) }}
-              onClick={() => handleMood(m)} disabled={loading}>
+            <button key={m.key}
+              onClick={() => handleMood(m)} disabled={loading}
+              style={{
+                display:'flex',alignItems:'center',gap:'.35rem',
+                padding:'.35rem .8rem',borderRadius:999,
+                border:`1.5px solid ${activeMood===m.key ? m.color : m.color+'44'}`,
+                background: activeMood===m.key ? m.color : m.bg,
+                color: activeMood===m.key ? '#fff' : m.color,
+                fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',
+                cursor:'pointer',transition:'all .2s',
+              }}
+              onMouseEnter={e=>{ if(activeMood!==m.key){ e.currentTarget.style.background=m.bg; e.currentTarget.style.transform='translateY(-2px)' } }}
+              onMouseLeave={e=>{ if(activeMood!==m.key){ e.currentTarget.style.transform='none' } }}>
               {m.emoji} {m.label}
             </button>
           ))}
@@ -773,12 +819,28 @@ export default function Search() {
       </div>
 
       {/* ── Filter row ── */}
-      <div style={{ display:'flex',alignItems:'center',gap:'.6rem',flexWrap:'wrap',marginBottom:'1.4rem' }}>
-        <div style={{ display:'flex',background:'var(--bg-2)',border:'1px solid var(--border)',borderRadius:10,padding:3,gap:2 }}>
-          {[['tracks',`🎵 Tracks (${tracks.length})`],['artists',`👤 Artists (${artists.length})`],['albums',`💿 Albums (${albums.length})`]].map(([k,l])=>(
-            <button key={k} onClick={()=>setTab(k)} style={{ padding:'.3rem .8rem',borderRadius:8,border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.77rem',transition:'all .18s',background:tab===k?'var(--coral)':'transparent',color:tab===k?'#fff':'var(--text-2)' }}>{l}</button>
+      <div style={{ display:'flex',alignItems:'center',gap:'.6rem',flexWrap:'wrap',marginBottom:'1.25rem' }}>
+        <div style={{ display:'flex',background:'var(--bg-2)',border:'1px solid var(--border)',borderRadius:12,padding:3,gap:2 }}>
+          {[['tracks',`🎵 Tracks`,tracks.length],['artists',`👤 Artists`,artists.length],['albums',`💿 Albums`,albums.length]].map(([k,l,n])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{
+              display:'flex',alignItems:'center',gap:'.4rem',
+              padding:'.32rem .85rem',borderRadius:9,border:'none',cursor:'pointer',
+              fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',transition:'all .2s',
+              background:tab===k?'var(--accent)':'transparent',
+              color:tab===k?'#fff':'var(--text-2)',
+            }}>
+              {l}
+              {n > 0 && <span style={{ background:tab===k?'rgba(255,255,255,.2)':'var(--bg-3)',borderRadius:999,padding:'0 .38rem',fontSize:'.65rem',fontWeight:800 }}>{n}</span>}
+            </button>
           ))}
         </div>
+        {(query || activeMood) && (
+          <button onClick={clearSearch} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.28rem .7rem',cursor:'pointer',fontSize:'.75rem',color:'var(--text-3)',fontFamily:'inherit',transition:'all .18s' }}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.color='var(--text-3)'}}>
+            ✕ Clear
+          </button>
+        )}
       </div>
 
       {/* Error */}

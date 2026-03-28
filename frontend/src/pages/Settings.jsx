@@ -365,26 +365,61 @@ function AccountPanel() {
 
 /* ── Appearance Panel ───────────────────────────────── */
 function AppearancePanel() {
-  const { theme, setTheme } = useTheme()
-  const THEMES = [
-    { key:'dark',   label:'Dark',   preview: <div style={{ height:44,borderRadius:8,background:'linear-gradient(135deg,#0d1220,#1a2338)',border:'1px solid #2a3f5f',display:'flex',alignItems:'flex-end',padding:'4px 6px',gap:3 }}><div style={{ width:16,height:8,background:'#3d9bff',borderRadius:2 }}/><div style={{ width:24,height:6,background:'#1e2d45',borderRadius:2 }}/></div> },
-    { key:'light',  label:'Light',  preview: <div style={{ height:44,borderRadius:8,background:'linear-gradient(135deg,#ffffff,#f0f4fa)',border:'1px solid #dae0ec',display:'flex',alignItems:'flex-end',padding:'4px 6px',gap:3 }}><div style={{ width:16,height:8,background:'#1a7fe8',borderRadius:2 }}/><div style={{ width:24,height:6,background:'#dde4f0',borderRadius:2 }}/></div> },
-    { key:'system', label:'System', preview: <div style={{ height:44,borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',display:'flex' }}><div style={{ flex:1,background:'linear-gradient(135deg,#0d1220,#1a2338)' }}/><div style={{ flex:1,background:'linear-gradient(135deg,#ffffff,#f0f4fa)' }}/></div> },
+  const { theme, palette, setTheme, setPalette, COLOR_PALETTES } = useTheme()
+
+  const MODES = [
+    { key:'dark',   label:'Dark',   icon:'🌙',
+      preview: <div style={{ height:44,borderRadius:8,background:'linear-gradient(135deg,#0a0b0f,#1f2330)',border:'1px solid #2e3650',display:'flex',alignItems:'flex-end',padding:'4px 6px',gap:3 }}><div style={{ width:16,height:8,background:'var(--coral)',borderRadius:2 }}/><div style={{ width:24,height:6,background:'#232836',borderRadius:2 }}/></div> },
+    { key:'light',  label:'Light',  icon:'☀️',
+      preview: <div style={{ height:44,borderRadius:8,background:'linear-gradient(135deg,#faf8f4,#ede9e0)',border:'1px solid #e0d9ce',display:'flex',alignItems:'flex-end',padding:'4px 6px',gap:3 }}><div style={{ width:16,height:8,background:'var(--coral)',borderRadius:2 }}/><div style={{ width:24,height:6,background:'#e0d9ce',borderRadius:2 }}/></div> },
+    { key:'system', label:'System', icon:'💻',
+      preview: <div style={{ height:44,borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',display:'flex' }}><div style={{ flex:1,background:'linear-gradient(135deg,#0a0b0f,#1f2330)' }}/><div style={{ flex:1,background:'linear-gradient(135deg,#faf8f4,#ede9e0)' }}/></div> },
   ]
+
   return (
     <div className="settings-panel">
-      <Section title="Theme">
+      <Section title="Color Mode">
         <div className="theme-grid">
-          {THEMES.map(t => (
-            <div key={t.key} className={`theme-option ${theme === t.key ? 'active' : ''}`} onClick={() => setTheme(t.key)}>
-              <div className="theme-option__preview">{t.preview}</div>
-              <div className="theme-option__label">{t.label}</div>
+          {MODES.map(m => (
+            <div key={m.key} className={`theme-option ${theme === m.key ? 'active' : ''}`} onClick={() => setTheme(m.key)}>
+              <div className="theme-option__preview">{m.preview}</div>
+              <div className="theme-option__label">{m.icon} {m.label}</div>
             </div>
           ))}
         </div>
       </Section>
+
+      <Section title="Color Palette">
+        <p style={{ fontSize:'.82rem',color:'var(--text-2)',marginBottom:'1rem',lineHeight:1.6 }}>
+          Choose an accent palette. This changes the primary colour throughout the entire app — buttons, highlights, badges, and active states.
+        </p>
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.75rem' }}>
+          {Object.entries(COLOR_PALETTES).map(([id, p]) => {
+            const colors = p[theme === 'light' ? 'light' : 'dark']
+            const isActive = palette === id
+            return (
+              <button key={id} onClick={() => setPalette(id)}
+                style={{ padding:'.85rem .7rem',borderRadius:14,border:`2px solid ${isActive ? colors.accent : 'var(--border)'}`,background:isActive ? `${colors.accent}12` : 'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',transition:'all .2s',textAlign:'center' }}
+                onMouseEnter={e=>{if(!isActive){e.currentTarget.style.borderColor=colors.accent;e.currentTarget.style.transform='translateY(-2px)'}}}
+                onMouseLeave={e=>{if(!isActive){e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='none'}}}>
+                {/* Preview swatches */}
+                <div style={{ display:'flex',gap:4,justifyContent:'center',marginBottom:'.5rem' }}>
+                  {[colors.accent,colors.accent2,colors.accent3].map((c,i) => (
+                    <div key={i} style={{ width:18,height:18,borderRadius:'50%',background:c,boxShadow:`0 2px 8px ${c}66` }}/>
+                  ))}
+                </div>
+                <div style={{ fontSize:'.75rem',fontWeight:700,color:isActive?colors.accent:'var(--text-2)' }}>
+                  {p.icon} {p.label}
+                </div>
+                {isActive && <div style={{ fontSize:'.62rem',color:colors.accent,marginTop:'.15rem',fontWeight:700 }}>Active ✓</div>}
+              </button>
+            )
+          })}
+        </div>
+      </Section>
+
       <Section title="Display">
-        <div className="settings-row">
+        <div className="settings-row" style={{ borderBottom:'none' }}>
           <div className="settings-row__info">
             <div className="settings-row__label">Compact Mode</div>
             <div className="settings-row__desc">Reduce spacing for a denser layout</div>

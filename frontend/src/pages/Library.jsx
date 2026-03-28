@@ -502,12 +502,12 @@ export default function Library() {
 
   // Overview cards config
   const overviewCards = [
-    { key:'playlists',   icon:'📂', label:'Playlists',   count:counts.playlists,   color:'var(--coral)' },
-    { key:'saved',       icon:'💾', label:'Saved',       count:counts.saved,       color:'var(--amber)' },
-    { key:'liked',       icon:'❤️',  label:'Liked',       count:counts.liked,       color:'var(--red)' },
-    { key:'artists',     icon:'👤', label:'Following',   count:counts.artists,     color:'var(--cyan)' },
-    { key:'extractions', icon:'🎸', label:'Extractions', count:counts.extractions, color:'#e87a30' },
-    { key:'generated',   icon:'🤖', label:'Generated',   count:counts.generated,   color:'#8b5cf6' },
+    { key:'playlists',   icon:'📂', label:'Playlists',   count:counts.playlists,   color:'var(--accent)',   grad:'linear-gradient(135deg,var(--accent),var(--accent-2))' },
+    { key:'saved',       icon:'💾', label:'Saved',       count:counts.saved,       color:'var(--accent-2)', grad:'linear-gradient(135deg,var(--accent-2),var(--accent-3))' },
+    { key:'liked',       icon:'❤️',  label:'Liked',       count:counts.liked,       color:'var(--red)',      grad:'linear-gradient(135deg,var(--red),var(--accent))' },
+    { key:'artists',     icon:'👤', label:'Following',   count:counts.artists,     color:'var(--accent-3)', grad:'linear-gradient(135deg,var(--accent-3),var(--accent-2))' },
+    { key:'extractions', icon:'🎸', label:'Extractions', count:counts.extractions, color:'#e87a30',         grad:'linear-gradient(135deg,#e87a30,var(--accent))' },
+    { key:'generated',   icon:'🤖', label:'Generated',   count:counts.generated,   color:'#8b5cf6',         grad:'linear-gradient(135deg,#8b5cf6,var(--accent-3))' },
   ]
 
   const sc = { finished:'badge--green', queued:'badge--yellow', failed:'badge--red' }
@@ -600,18 +600,14 @@ export default function Library() {
                   {overviewCards.map(card => (
                     <button key={card.key}
                       onClick={() => setActiveSection(card.key)}
-                      style={{
-                        background:'var(--bg-1)',border:`1px solid var(--border)`,borderRadius:16,
-                        padding:'1.1rem',textAlign:'center',cursor:'pointer',
-                        transition:'all .2s',fontFamily:'inherit',
-                        borderTop:`3px solid ${card.color}`,
-                      }}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor=card.color;e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='var(--shadow-sm)'}}
+                      style={{ background:'var(--bg-1)',border:`1px solid var(--border)`,borderRadius:16,padding:'1.25rem',textAlign:'center',cursor:'pointer',transition:'all .25s cubic-bezier(.34,1.2,.64,1)',fontFamily:'inherit',position:'relative',overflow:'hidden' }}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor=card.color;e.currentTarget.style.transform='translateY(-4px) scale(1.02)';e.currentTarget.style.boxShadow=`0 12px 32px ${card.color}22`}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}
                     >
-                      <div style={{ fontSize:'1.4rem',marginBottom:'.3rem' }}>{card.icon}</div>
-                      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.5rem',fontWeight:900,color:card.color }}>{card.count}</div>
-                      <div style={{ fontSize:'.7rem',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.04em',marginTop:'.1rem' }}>{card.label}</div>
+                      <div style={{ position:'absolute',top:0,left:0,right:0,height:3,background:card.grad,borderRadius:'16px 16px 0 0' }}/>
+                      <div style={{ fontSize:'1.6rem',marginBottom:'.35rem' }}>{card.icon}</div>
+                      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.7rem',fontWeight:900,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundImage:card.grad,backgroundClip:'text' }}>{card.count}</div>
+                      <div style={{ fontSize:'.7rem',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.04em',marginTop:'.15rem',fontWeight:700 }}>{card.label}</div>
                     </button>
                   ))}
                 </div>

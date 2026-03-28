@@ -95,7 +95,7 @@ function NavSearch() {
 
 function Nav() {
   const { user, logout } = useAuth()
-  const { theme, toggleTheme } = useTheme()
+  const { theme, palette, toggleTheme, setPalette, COLOR_PALETTES } = useTheme()
   const { startTour } = useTutorial()
   const navigate  = useNavigate()
   const location  = useLocation()
@@ -161,8 +161,10 @@ function Nav() {
 
           {/* Theme toggle */}
           <button className="nav-theme" onClick={toggleTheme}
-            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} aria-label="Toggle theme">
+            title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} aria-label="Toggle theme"
+            style={{ display:'flex',alignItems:'center',gap:'.35rem' }}>
             {theme === 'dark' ? '☀️' : '🌙'}
+            <span style={{ width:8,height:8,borderRadius:'50%',background:'var(--accent)',flexShrink:0,boxShadow:`0 0 6px var(--accent)` }}/>
           </button>
 
           {/* Auth */}
