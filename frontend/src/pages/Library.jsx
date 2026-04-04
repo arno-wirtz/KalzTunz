@@ -108,126 +108,333 @@ const IconPlay     = () => <svg width={14} height={14} viewBox="0 0 24 24" fill=
 const IconPause    = () => <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
 const IconVolume   = () => <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
 
-/* ── Mini audio player (uses Web Audio API for oscillator-based preview) ─ */
+/* ── ConfirmDialog ─────────────────────────────────────────────── */
+function ConfirmDialog({ message, detail, onConfirm, onCancel, confirmLabel='Delete', danger=true }) {
+  return (
+    <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.72)',zIndex:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem',animation:'fadeIn .15s ease' }} onClick={onCancel}>
+      <div style={{ width:'100%',maxWidth:380,background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:20,padding:'1.75rem',boxShadow:'0 24px 80px rgba(0,0,0,.55)',animation:'dropIn .22s cubic-bezier(.34,1.2,.64,1)' }} onClick={e=>e.stopPropagation()}>
+        <div style={{ display:'flex',alignItems:'flex-start',gap:'.85rem',marginBottom:'1.1rem' }}>
+          <div style={{ width:40,height:40,borderRadius:'50%',background:'rgba(255,95,107,.12)',border:'1.5px solid rgba(255,95,107,.28)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0 }}>🗑</div>
+          <div>
+            <div style={{ fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:'1rem',marginBottom:'.3rem' }}>{message}</div>
+            {detail && <div style={{ fontSize:'.82rem',color:'var(--text-2)',lineHeight:1.55 }}>{detail}</div>}
+          </div>
+        </div>
+        <div style={{ display:'flex',gap:'.5rem',justifyContent:'flex-end' }}>
+          <button className="btn btn--ghost btn--sm" onClick={onCancel}>Cancel</button>
+          <button className={`btn btn--sm ${danger?'btn--danger':'btn--primary'}`}
+            style={danger?{background:'rgba(255,95,107,.12)',border:'1.5px solid rgba(255,95,107,.35)',color:'var(--accent-err)'}:{}}
+            onClick={onConfirm}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ── Full-featured audio player hook ──────────────────────────── */
+// Supports: play, pause, resume, seek (drag progress), queue, playlist mode
 function useMiniPlayer() {
-  const [playing,   setPlaying]   = useState(null) // { id, title, artist, key, bpm }
-  const [progress,  setProgress]  = useState(0)
-  const [elapsed,   setElapsed]   = useState(0)
-  const audioRef  = useRef(null)
-  const timerRef  = useRef(null)
-  const ctxRef    = useRef(null)
-  const oscRef    = useRef(null)
-  const gainRef   = useRef(null)
+  const [playing,   setPlaying]   = useState(null)  // current track object
+  const [paused,    setPaused]    = useState(false)
+  const [progress,  setProgress]  = useState(0)     // 0–1
+  const [elapsed,   setElapsed]   = useState(0)     // seconds
+  const [queue,     setQueue]     = useState([])     // upcoming tracks
+  const [queueIdx,  setQueueIdx]  = useState(0)
 
-  // Build an AudioContext-based chord preview from key+bpm
-  const playTrack = useCallback((track) => {
-    // Stop any existing
-    stopAll()
-    if (!track) return
+  const audioRef    = useRef(null)
+  const timerRef    = useRef(null)
+  const ctxRef      = useRef(null)
+  const gainRef     = useRef(null)
+  const startRef    = useRef(0)   // for oscillator elapsed tracking
+  const pausedAtRef = useRef(0)   // elapsed seconds when paused
+  const durationRef = useRef(28)  // track duration
 
-    // If track has a real preview URL, use it
-    if (track.preview) {
-      const audio = new Audio(track.preview)
-      audio.crossOrigin = 'anonymous'
-      audioRef.current = audio
-      audio.play().catch(() => {})
-      audio.ontimeupdate = () => {
-        if (audio.duration) {
-          setProgress(audio.currentTime / audio.duration)
-          setElapsed(audio.currentTime)
-        }
-      }
-      audio.onended = () => { setPlaying(null); setProgress(0); setElapsed(0) }
-      setPlaying(track)
-      setProgress(0)
-      setElapsed(0)
-      return
+  const clearTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current=null } }
+
+  // ── Stop everything cleanly ──────────────────────────────────
+  const stopAll = useCallback(() => {
+    clearTimer()
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+      audioRef.current.onended = null
+      audioRef.current = null
     }
+    if (ctxRef.current) { try { ctxRef.current.close() } catch {} ctxRef.current=null }
+    gainRef.current = null
+    setPlaying(null); setPaused(false); setProgress(0); setElapsed(0)
+    pausedAtRef.current = 0
+  }, [])
 
-    // Otherwise generate a simple oscillator-based chord tone preview
-    // Parse key → root frequency
-    const KEY_FREQS = { C:261.63,'C#':277.18,D:293.66,'D#':311.13,E:329.63,F:349.23,'F#':369.99,G:392.00,'G#':415.30,A:440.00,'A#':466.16,B:493.88 }
-    const rootNote = (track.key||'C major').split(' ')[0]
-    const mode     = (track.key||'C major').split(' ')[1] || 'major'
-    const root     = KEY_FREQS[rootNote] || 261.63
-    // major triad: root, major3rd (+4 semitones), 5th (+7 semitones)
-    const semitone  = (n) => root * Math.pow(2, n/12)
-    const freqs     = mode === 'minor' ? [root, semitone(3), semitone(7)] : [root, semitone(4), semitone(7)]
-
+  // ── Oscillator preview for tracks without a real URL ────────
+  const startOscillator = useCallback((track, fromSeconds=0) => {
+    if (ctxRef.current) { try { ctxRef.current.close() } catch {} ctxRef.current=null }
+    clearTimer()
+    const KEY_FREQS = {C:261.63,'C#':277.18,D:293.66,'D#':311.13,E:329.63,F:349.23,'F#':369.99,G:392,G8:415.3,'G#':415.3,A:440,'A#':466.16,B:493.88}
+    const rootNote  = (track.key||'C major').split(' ')[0]
+    const mode      = (track.key||'C major').split(' ')[1]||'major'
+    const root      = KEY_FREQS[rootNote]||261.63
+    const st        = n => root * Math.pow(2, n/12)
+    const freqs     = mode==='minor'?[root,st(3),st(7)]:[root,st(4),st(7)]
+    const totalSec  = track.duration || 28
+    const remaining = totalSec - fromSeconds
+    if (remaining <= 0) { stopAll(); return }
+    durationRef.current = totalSec
     try {
-      const ctx  = new (window.AudioContext || window.webkitAudioContext)()
+      const ctx  = new (window.AudioContext||window.webkitAudioContext)()
       ctxRef.current = ctx
       const gain = ctx.createGain()
       gain.gain.setValueAtTime(0.18, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 28)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + remaining)
       gain.connect(ctx.destination)
       gainRef.current = gain
-
       freqs.forEach(f => {
         const osc = ctx.createOscillator()
         osc.type = 'triangle'
         osc.frequency.setValueAtTime(f, ctx.currentTime)
         osc.connect(gain)
         osc.start(ctx.currentTime)
-        osc.stop(ctx.currentTime + 28)
+        osc.stop(ctx.currentTime + remaining)
       })
-
-      setPlaying(track)
-      setProgress(0)
-      setElapsed(0)
-
-      let start = Date.now()
-      const TOTAL = 28000 // 28 seconds
+      const startAt = Date.now() - fromSeconds * 1000
+      startRef.current = startAt
       timerRef.current = setInterval(() => {
-        const el = (Date.now() - start) / 1000
+        const el = Math.min((Date.now()-startAt)/1000, totalSec)
         setElapsed(el)
-        setProgress(Math.min(el / 28, 1))
-        if (el >= 28) stopAll()
-      }, 250)
-    } catch(e) {
-      console.warn('AudioContext not available:', e)
+        setProgress(el/totalSec)
+        if (el >= totalSec) { clearTimer(); playNext() }
+      }, 100)
+    } catch(e) { console.warn('AudioCtx unavailable:', e) }
+  }, [])
+
+  // ── Play a single track ──────────────────────────────────────
+  const playTrack = useCallback((track, fromSeconds=0) => {
+    stopAll()
+    if (!track) return
+    setPlaying(track); setPaused(false); setProgress(0); setElapsed(fromSeconds)
+    pausedAtRef.current = fromSeconds
+    durationRef.current = track.duration || 28
+
+    if (track.preview) {
+      const audio = new Audio(track.preview)
+      audio.crossOrigin = 'anonymous'
+      audioRef.current = audio
+      audio.currentTime = fromSeconds
+      audio.play().catch(()=>{})
+      timerRef.current = setInterval(() => {
+        if (!audio.paused) {
+          const el = audio.currentTime
+          setElapsed(el)
+          if (audio.duration) setProgress(el/audio.duration)
+        }
+      }, 100)
+      audio.onended = () => { clearTimer(); playNext() }
+    } else {
+      startOscillator(track, fromSeconds)
     }
+  }, [stopAll, startOscillator])
+
+  // ── Pause / Resume ───────────────────────────────────────────
+  const pause = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      clearTimer()
+      pausedAtRef.current = audioRef.current.currentTime
+    } else if (ctxRef.current) {
+      // Oscillator can't be truly paused — store position and stop
+      clearTimer()
+      pausedAtRef.current = elapsed
+      try { ctxRef.current.suspend() } catch {}
+    }
+    setPaused(true)
+  }, [elapsed])
+
+  const resume = useCallback(() => {
+    if (!playing) return
+    if (audioRef.current) {
+      audioRef.current.play().catch(()=>{})
+      timerRef.current = setInterval(() => {
+        if (audioRef.current && !audioRef.current.paused) {
+          const el = audioRef.current.currentTime
+          setElapsed(el)
+          if (audioRef.current.duration) setProgress(el/audioRef.current.duration)
+        }
+      }, 100)
+    } else {
+      // Oscillator: restart from paused position
+      startOscillator(playing, pausedAtRef.current)
+    }
+    setPaused(false)
+  }, [playing, startOscillator])
+
+  const togglePause = useCallback(() => {
+    paused ? resume() : pause()
+  }, [paused, pause, resume])
+
+  // ── Seek (drag progress bar) ─────────────────────────────────
+  const seekTo = useCallback((fraction) => {
+    const total = durationRef.current || 28
+    const targetSec = Math.max(0, Math.min(fraction * total, total - 0.1))
+    if (audioRef.current) {
+      audioRef.current.currentTime = targetSec
+      setElapsed(targetSec)
+      setProgress(fraction)
+      pausedAtRef.current = targetSec
+    } else if (playing) {
+      // Oscillator: restart from new position
+      const wasPlaying = !paused
+      startOscillator(playing, targetSec)
+      if (!wasPlaying) {
+        // if was paused, pause again at new position
+        setTimeout(() => { try { ctxRef.current?.suspend() } catch {} }, 50)
+        setPaused(true)
+      }
+      setElapsed(targetSec)
+      setProgress(fraction)
+      pausedAtRef.current = targetSec
+    }
+  }, [playing, paused, startOscillator])
+
+  // ── Queue management ─────────────────────────────────────────
+  const playNext = useCallback(() => {
+    setQueue(q => {
+      if (!q.length) { stopAll(); return q }
+      const [next, ...rest] = q
+      playTrack(next)
+      return rest
+    })
+  }, [stopAll, playTrack])
+
+  const playPrev = useCallback(() => {
+    // If > 3s into track, restart current. Otherwise skip back.
+    if (elapsed > 3 && playing) { seekTo(0); return }
+    // No prev track tracking in simple queue — just restart
+    if (playing) seekTo(0)
+  }, [elapsed, playing, seekTo])
+
+  const enqueue = useCallback((tracks) => {
+    setQueue(q => [...q, ...(Array.isArray(tracks) ? tracks : [tracks])])
   }, [])
 
-  const stopAll = useCallback(() => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ''; audioRef.current = null }
-    if (ctxRef.current)   { try { ctxRef.current.close() } catch {} ctxRef.current = null }
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
-    setPlaying(null); setProgress(0); setElapsed(0)
-  }, [])
+  const playNow = useCallback((track) => {
+    playTrack(track)
+  }, [playTrack])
 
-  const toggleTrack = useCallback((track) => {
-    if (playing?.id === track.id) { stopAll() } else { playTrack(track) }
-  }, [playing, playTrack, stopAll])
+  const playPlaylist = useCallback((tracks) => {
+    if (!tracks.length) return
+    playTrack(tracks[0])
+    setQueue(tracks.slice(1))
+  }, [playTrack])
+
+  const clearQueue = useCallback(() => setQueue([]), [])
 
   useEffect(() => () => stopAll(), [])
 
-  return { playing, progress, elapsed, toggleTrack, stopAll }
+  return {
+    playing, paused, progress, elapsed, queue,
+    playNow, playPlaylist, enqueue, clearQueue,
+    togglePause, pause, resume, seekTo,
+    playNext, playPrev, stopAll,
+  }
 }
 
-/* ── Now Playing Bar ─────────────────────────────────────────── */
-function NowPlayingBar({ playing, progress, elapsed, onStop }) {
+/* ── Draggable progress bar ────────────────────────────────────── */
+function ProgressBar({ progress, onSeek, accentColor='var(--accent)' }) {
+  const barRef  = useRef(null)
+  const dragging = useRef(false)
+
+  const getFraction = (e) => {
+    const rect = barRef.current?.getBoundingClientRect()
+    if (!rect) return 0
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+  }
+
+  const onMouseDown = (e) => {
+    dragging.current = true
+    onSeek(getFraction(e))
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+    window.addEventListener('touchmove', onMouseMove, {passive:false})
+    window.addEventListener('touchend', onMouseUp)
+  }
+  const onMouseMove = (e) => { if (dragging.current) onSeek(getFraction(e)) }
+  const onMouseUp   = ()  => {
+    dragging.current = false
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+    window.removeEventListener('touchmove', onMouseMove)
+    window.removeEventListener('touchend', onMouseUp)
+  }
+
+  return (
+    <div ref={barRef} onMouseDown={onMouseDown} onTouchStart={onMouseDown}
+      style={{ flex:1,height:16,display:'flex',alignItems:'center',cursor:'pointer',padding:'6px 0',margin:'0 2px' }}>
+      <div style={{ flex:1,height:4,background:'rgba(255,255,255,.18)',borderRadius:2,position:'relative',overflow:'visible' }}>
+        {/* Filled track */}
+        <div style={{ position:'absolute',left:0,top:0,height:'100%',width:`${progress*100}%`,background:accentColor,borderRadius:2,transition:dragging.current?'none':'width .1s linear' }}/>
+        {/* Scrubber thumb */}
+        <div style={{ position:'absolute',top:'50%',left:`${progress*100}%`,transform:'translate(-50%,-50%)',width:13,height:13,borderRadius:'50%',background:'#fff',boxShadow:'0 2px 8px rgba(0,0,0,.4)',cursor:'grab',transition:dragging.current?'none':'left .1s linear' }}/>
+      </div>
+    </div>
+  )
+}
+
+/* ── Now Playing Bar — full player ────────────────────────────── */
+function NowPlayingBar({ playing, paused, progress, elapsed, queue, onTogglePause, onSeek, onNext, onPrev, onStop }) {
   if (!playing) return null
   const total = playing.duration || 28
+  const hasNext = queue.length > 0
+
   return (
-    <div className="now-playing-bar">
-      <div className="np-cover" style={{ background: coverGrad(playing.title) }}>🎵</div>
-      <div className="np-info">
+    <div className="now-playing-bar" style={{ padding:'.55rem 1.25rem', gap:'.65rem' }}>
+      {/* Cover */}
+      <div className="np-cover" style={{ background:coverGrad(playing.title), flexShrink:0 }}>🎵</div>
+
+      {/* Track info */}
+      <div className="np-info" style={{ flexShrink:0 }}>
         <div className="np-title">{playing.title}</div>
-        <div className="np-artist">{playing.artist} · {playing.key}</div>
+        <div className="np-artist">{playing.artist}{playing.key ? ` · ${playing.key}` : ''}</div>
       </div>
-      <div className="np-controls">
-        <button className="np-btn np-play" onClick={onStop}><IconPause/></button>
+
+      {/* Controls */}
+      <div style={{ display:'flex',alignItems:'center',gap:'.2rem',flexShrink:0 }}>
+        {/* Prev */}
+        <button className="np-btn" onClick={onPrev} title="Previous / Restart" style={{ opacity:.75 }}>
+          <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+        {/* Play/Pause */}
+        <button className="np-btn np-play" onClick={onTogglePause} title={paused?'Resume':'Pause'}>
+          {paused ? <IconPlay/> : <IconPause/>}
+        </button>
+        {/* Next */}
+        <button className="np-btn" onClick={onNext} disabled={!hasNext} title={hasNext?`Next (${queue.length} queued)`:'Queue empty'} style={{ opacity:hasNext?1:.38 }}>
+          <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        </button>
       </div>
-      <div className="np-progress-wrap">
-        <span className="np-time">{fmtDur(elapsed)}</span>
-        <div className="np-bar"><div className="np-bar-fill" style={{ width:`${progress*100}%` }}/></div>
-        <span className="np-time">{fmtDur(total)}</span>
+
+      {/* Seekable progress bar */}
+      <div className="np-progress-wrap" style={{ flex:1,display:'flex',alignItems:'center',gap:'.5rem',minWidth:0 }}>
+        <span className="np-time" style={{ flexShrink:0 }}>{fmtDur(elapsed)}</span>
+        <ProgressBar progress={progress} onSeek={onSeek}/>
+        <span className="np-time" style={{ flexShrink:0 }}>{fmtDur(total)}</span>
       </div>
-      <div style={{ display:'flex',alignItems:'center',gap:'.38rem',marginLeft:'auto' }}>
-        <span style={{ fontSize:'.68rem',color:'var(--text-3)' }}>{playing.bpm} BPM</span>
-      </div>
-      <button className="np-close" onClick={onStop} title="Stop"><IconX/></button>
+
+      {/* Queue badge */}
+      {hasNext && (
+        <div style={{ display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.7rem',color:'var(--text-3)',flexShrink:0 }}>
+          <svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+          +{queue.length} queued
+        </div>
+      )}
+
+      {/* BPM */}
+      {playing.bpm && (
+        <div style={{ fontSize:'.67rem',color:'var(--text-3)',flexShrink:0 }}>{playing.bpm} BPM</div>
+      )}
+
+      {/* Close */}
+      <button className="np-close" onClick={onStop} title="Stop playback" style={{ flexShrink:0 }}><IconX/></button>
     </div>
   )
 }
@@ -416,12 +623,12 @@ function PlaylistCard({ playlist, onOpen, onDelete }) {
         <div className="lib-playlist-meta">{playlist.tracks.length} tracks{dur>0&&` · ${fmtDur(dur)}`}</div>
         <div style={{ fontSize:'.67rem',color:'var(--text-3)',marginTop:'.1rem' }}>{fmtDate(playlist.createdAt)}</div>
       </div>
-      <button className="btn btn--icon btn--ghost btn--sm lib-playlist-del" title="Delete" onClick={e=>{e.stopPropagation();onDelete(playlist.id)}}><IconTrash/></button>
+      <button className="btn btn--icon btn--ghost btn--sm lib-playlist-del" title="Delete" onClick={e=>{e.stopPropagation();onDelete(playlist.id, playlist.name)}}><IconTrash/></button>
     </div>
   )
 }
 
-function PlaylistDetail({ playlist, onBack, onRemoveTrack, onToggle, playingId }) {
+function PlaylistDetail({ playlist, onBack, onRemoveTrack, onToggle, playingId, onPlayAll }) {
   const dur = playlist.tracks.reduce((s,t)=>s+(t.duration||0),0)
   return (
     <div>
@@ -433,10 +640,13 @@ function PlaylistDetail({ playlist, onBack, onRemoveTrack, onToggle, playingId }
           ))}
           {!playlist.tracks.length&&<div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'2rem' }}>📂</div>}
         </div>
-        <div>
+        <div style={{ flex:1 }}>
           <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.25rem',fontWeight:800,marginBottom:'.18rem' }}>{playlist.name}</h2>
           <p style={{ fontSize:'.82rem',color:'var(--text-2)' }}>{playlist.tracks.length} tracks{dur>0&&` · ${fmtDur(dur)}`} · Created {fmtDateFull(playlist.createdAt)}</p>
         </div>
+        {playlist.tracks.length > 0 && onPlayAll && (
+          <button className="btn btn--primary btn--sm" onClick={()=>onPlayAll(playlist.tracks)} style={{ flexShrink:0 }}>▶ Play All</button>
+        )}
       </div>
       {!playlist.tracks.length
         ? <div className="lib-empty"><div className="lib-empty__icon">🎵</div><p className="lib-empty__text">This playlist is empty</p><Link to="/search" className="btn btn--primary btn--sm">Add tracks from Discover</Link></div>
@@ -450,7 +660,7 @@ function PlaylistDetail({ playlist, onBack, onRemoveTrack, onToggle, playingId }
                 <div className="lib-row__info"><div className="lib-row__title">{t.title}</div><div className="lib-row__sub">{t.artist}</div></div>
                 <div className="lib-row__meta">
                   <span style={{ fontSize:'.7rem',color:'var(--text-3)',fontFamily:'monospace' }}>{fmtDur(t.duration)}</span>
-                  <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>onRemoveTrack(playlist.id,t.id)}><IconX/></button>
+                  <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>onRemoveTrack(playlist.id,t.id,t.title)}><IconX/></button>
                 </div>
               </div>
             ))}
@@ -502,6 +712,10 @@ export default function Library() {
     const stored = loadLibraryData()
     return stored || DEFAULT_DATA
   })
+  const askConfirm = useCallback((message, detail, onConfirm) => {
+    setConfirm({ message, detail, onConfirm })
+  }, [])
+
   const updateData = useCallback((patch) => {
     setData(prev => {
       const next = { ...prev, ...patch }
@@ -515,10 +729,12 @@ export default function Library() {
   const [activeSection,  setActiveSection]  = useState('overview')
   const [search,         setSearch]         = useState('')
   const [showCreate,     setShowCreate]     = useState(false)
+  const [confirm,       setConfirm]       = useState(null) // {message,detail,onConfirm}
   const [openPlaylist,   setOpenPlaylist]   = useState(null)
   const [showHistory,    setShowHistory]    = useState(false)
 
-  const { playing, progress, elapsed, toggleTrack, stopAll } = useMiniPlayer()
+  const { playing, paused, progress, elapsed, queue, playNow, playPlaylist, enqueue, clearQueue, togglePause, seekTo, playNext, playPrev, stopAll } = useMiniPlayer()
+  const toggleTrack = useCallback((track) => { playing?.id === track.id ? togglePause() : playNow(track) }, [playing, togglePause, playNow])
 
   const counts = useMemo(() => ({
     playlists: playlists.length, saved: saved.length, liked: liked.length,
@@ -532,14 +748,33 @@ export default function Library() {
   const filterP = arr => !q ? arr : arr.filter(p=>p.name?.toLowerCase().includes(q))
   const filterI = arr => !q ? arr : arr.filter(i=>i.title?.toLowerCase().includes(q))
 
-  const rm = (key, id) => updateData({ [key]: data[key].filter(x=>x.id!==id) })
+  const rm = useCallback((key, id, label='item') => {
+    const titles = { saved:'saved track', liked:'liked track', extractions:'extraction', generations:'generated track', artists:'artist' }
+    askConfirm(
+      `Remove this ${titles[key]||label}?`,
+      'This removes it from your library. You can re-add it later.',
+      () => updateData({ [key]: data[key].filter(x=>x.id!==id) })
+    )
+  }, [data, updateData, askConfirm])
   const createPlaylist = name => updateData({ playlists:[{ id:`pl${Date.now()}`,name,tracks:[],createdAt:new Date().toISOString() },...playlists] })
-  const deletePlaylist = id  => { updateData({ playlists:playlists.filter(p=>p.id!==id) }); if(openPlaylist?.id===id) setOpenPlaylist(null) }
-  const rmFromPlaylist = (plId,tId) => {
-    const next = playlists.map(p=>p.id!==plId?p:{...p,tracks:p.tracks.filter(t=>t.id!==tId)})
-    updateData({ playlists:next })
-    setOpenPlaylist(prev=>prev?.id===plId?{...prev,tracks:prev.tracks.filter(t=>t.id!==tId)}:prev)
-  }
+  const deletePlaylist = useCallback((id, name) => {
+    askConfirm(
+      `Delete playlist "${name||'this playlist'}"?`,
+      'All tracks will be removed from the playlist. Your tracks are not deleted.',
+      () => { updateData({ playlists:playlists.filter(p=>p.id!==id) }); if(openPlaylist?.id===id) setOpenPlaylist(null) }
+    )
+  }, [playlists, openPlaylist, updateData, askConfirm])
+  const rmFromPlaylist = useCallback((plId, tId, trackTitle) => {
+    askConfirm(
+      `Remove "${trackTitle||'this track'}" from playlist?`,
+      null,
+      () => {
+        const next = playlists.map(p=>p.id!==plId?p:{...p,tracks:p.tracks.filter(t=>t.id!==tId)})
+        updateData({ playlists:next })
+        setOpenPlaylist(prev=>prev?.id===plId?{...prev,tracks:prev.tracks.filter(t=>t.id!==tId)}:prev)
+      }
+    )
+  }, [playlists, updateData, askConfirm])
 
   const NAV = [
     { key:'overview',    icon:'🏠', label:'Overview' },
@@ -682,7 +917,7 @@ export default function Library() {
                 :<LibEmpty icon="📂" text="No playlists yet" cta="Create your first" onClick={()=>setShowCreate(true)}/>
             )}
             {activeSection==='playlists'&&openPlaylist&&(
-              <PlaylistDetail playlist={openPlaylist} onBack={()=>setOpenPlaylist(null)} onRemoveTrack={rmFromPlaylist} onToggle={toggleTrack} playingId={playing?.id}/>
+              <PlaylistDetail playlist={openPlaylist} onBack={()=>setOpenPlaylist(null)} onRemoveTrack={rmFromPlaylist} onToggle={toggleTrack} playingId={playing?.id} onPlayAll={playPlaylist}/>
             )}
 
             {/* SAVED */}
@@ -711,7 +946,7 @@ export default function Library() {
                          <div className="artist-card__meta">{fmtNum(a.followers)} followers · {a.tracks} tracks</div>
                          {a.bio&&<div style={{ fontSize:'.71rem',color:'var(--text-3)',marginTop:'.12rem' }} className="truncate">{a.bio}</div>}
                        </div>
-                       <button className="btn btn--danger btn--sm" onClick={()=>updateData({artists:artists.filter(x=>x.id!==a.id)})}>Unfollow</button>
+                       <button className="btn btn--danger btn--sm" onClick={()=>askConfirm(`Unfollow ${a.username}?`,'You can follow them again from Discover.',()=>updateData({artists:artists.filter(x=>x.id!==a.id)}))}>Unfollow</button>
                      </div>
                    ))}
                  </div>
@@ -780,7 +1015,10 @@ export default function Library() {
       </div>
 
       {/* Now playing bar */}
-      {playing && <NowPlayingBar playing={playing} progress={progress} elapsed={elapsed} onStop={stopAll}/>}
+      {playing && <NowPlayingBar playing={playing} paused={paused} progress={progress} elapsed={elapsed} queue={queue} onTogglePause={togglePause} onSeek={seekTo} onNext={playNext} onPrev={playPrev} onStop={stopAll}/>}
+
+      {/* Confirm dialog */}
+      {confirm && <ConfirmDialog message={confirm.message} detail={confirm.detail} onConfirm={()=>{confirm.onConfirm();setConfirm(null)}} onCancel={()=>setConfirm(null)}/>}
 
       {/* Modals */}
       {showCreate  && <CreatePlaylistModal onClose={()=>setShowCreate(false)} onCreate={createPlaylist}/>}

@@ -251,11 +251,11 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
       const isRoot = i === 0
       // Cell background
       doc.setFillColor(isRoot ? 255 : 248, isRoot ? 248 : 246, isRoot ? 240 : 244)
-      doc.setDrawColor(isRoot ? ...CORAL : ...LLGREY)
+      doc.setDrawColor(...(isRoot ? CORAL : LLGREY))
       doc.setLineWidth(isRoot ? 0.5 : 0.2)
       doc.roundedRect(x, y, colW-1, 14, 1.5, 1.5, 'FD')
       // Top accent
-      doc.setFillColor(isRoot ? ...CORAL : ...AMBER)
+      doc.setFillColor(...(isRoot ? CORAL : AMBER))
       doc.rect(x, y, colW-1, 2, 'F')
       // Roman numeral
       doc.setFont('times','italic'); doc.setFontSize(7); doc.setTextColor(...GREY)
@@ -385,7 +385,7 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
 
         // Note head
         const isRoot = ni === 0
-        doc.setFillColor(isRoot ? ...DARK : 60, isRoot ? undefined : 60, isRoot ? undefined : 60)
+        doc.setFillColor(...(isRoot ? DARK : [60,60,60]))
         doc.setFillColor(...(isRoot ? DARK : [60,60,60]))
         doc.ellipse(noteXpos, noteY, 1.4, 1.0, 'F')
 
@@ -476,7 +476,7 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
       const isFiltered = filterInstrument === instr
 
       // Header row
-      doc.setFillColor(isFiltered ? ...CORAL : 245, isFiltered ? undefined : 242, isFiltered ? undefined : 238)
+      doc.setFillColor(...(isFiltered ? CORAL : [245,242,238]))
       doc.roundedRect(M, y, INNER, 7, 1.5, 1.5, 'F')
       doc.setFont('helvetica','bold'); doc.setFontSize(8)
       doc.setTextColor(isFiltered ? 255 : ...DARK, isFiltered ? 255 : undefined, isFiltered ? 255 : undefined)
