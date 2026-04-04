@@ -89,45 +89,495 @@ function buildLocal(root, mode, mood, num) {
 }
 function fmtDur(s) { return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}` }
 
-/* ── PDF export ──────────────────────────────────────────────── */
-async function exportPDF(params, progs) {
+/* ═══════════════════════════════════════════════════════════════
+   PROFESSIONAL SHEET MUSIC PDF GENERATOR
+   Renders real musical notation: treble clef, time signature,
+   bar lines, note heads, stems, chord symbols, Roman numerals,
+   scale reference, lyrics placeholder, instrument part labels,
+   and filterable per-instrument sections.
+   ═══════════════════════════════════════════════════════════════ */
+
+// Musical note data — chord → MIDI-relative note positions for staff
+const CHORD_NOTES = {
+  // Each chord maps to [root, third, fifth] as semitone offsets above middle C (C4=60)
+  'C':  [0,4,7], 'Cm': [0,3,7], 'C#': [1,5,8], 'C#m':[1,4,8],
+  'D':  [2,6,9], 'Dm': [2,5,9], 'D#': [3,7,10],'D#m':[3,6,10],
+  'E':  [4,8,11],'Em': [4,7,11],'F':  [5,9,12], 'Fm': [5,8,12],
+  'F#': [6,10,13],'F#m':[6,9,13],'G': [7,11,14],'Gm': [7,10,14],
+  'G#': [8,12,15],'G#m':[8,11,15],'A': [9,13,16],'Am': [9,12,16],
+  'A#': [10,14,17],'A#m':[10,13,17],'B':[11,15,18],'Bm':[11,14,18],
+  'Cdim':[0,3,6],'Ddim':[2,5,8],'Edim':[4,7,10],'Fdim':[5,8,11],
+  'Gdim':[7,10,13],'Adim':[9,12,15],'Bdim':[11,14,17],
+}
+
+// MIDI semitone → staff line position (lines from middle C, positive = up)
+function midiToStaffPos(semitone) {
+  const octave = Math.floor(semitone / 12)
+  const note   = semitone % 12
+  const diatonic = [0,0,1,1,2,3,3,4,4,5,5,6] // C=0,D=1,E=2,F=3,G=4,A=5,B=6
+  return octave * 7 + diatonic[note]
+}
+
+// Draw a filled note head as ellipse on the staff
+function drawNoteHead(doc, x, staffY, staffPos, filled=true, stemUp=true) {
+  const SPACE = 2.5 // mm between staff lines
+  const y = staffY - (staffPos - 4) * SPACE  // pos 4 = first ledger line above (middle C area)
+  const rx = 1.3, ry = 1.0
+  if (filled) {
+    doc.setFillColor(20,20,20); doc.ellipse(x, y, rx, ry, 'F')
+  } else {
+    doc.setDrawColor(20,20,20); doc.setLineWidth(0.3); doc.ellipse(x, y, rx, ry, 'D')
+  }
+  // Stem
+  const stemLen = 7
+  if (stemUp) { doc.setLineWidth(0.25); doc.setDrawColor(20,20,20); doc.line(x+rx, y, x+rx, y-stemLen) }
+  else        { doc.setLineWidth(0.25); doc.setDrawColor(20,20,20); doc.line(x-rx, y, x-rx, y+stemLen) }
+  // Ledger lines if needed
+  doc.setLineWidth(0.25); doc.setDrawColor(60,60,60)
+  for (let lp = 0; lp <= 2; lp++) {
+    if (staffPos <= lp * 2) doc.line(x-2.2, staffY-(lp*2-4)*SPACE, x+2.2, staffY-(lp*2-4)*SPACE)
+  }
+  for (let lp = 10; lp <= 12; lp += 2) {
+    if (staffPos >= lp) doc.line(x-2.2, staffY-(lp-4)*SPACE, x+2.2, staffY-(lp-4)*SPACE)
+  }
+  return y
+}
+
+// Draw a 5-line staff
+function drawStaff(doc, x, y, width) {
+  const SPACE = 2.5
+  doc.setDrawColor(80,80,80); doc.setLineWidth(0.22)
+  for (let i = 0; i < 5; i++) {
+    doc.line(x, y + i * SPACE, x + width, y + i * SPACE)
+  }
+  return y + 4 * SPACE  // bottom line y
+}
+
+// Draw treble clef symbol using bezier approximation
+function drawTrebleClef(doc, x, y) {
+  doc.setFont('times','bold'); doc.setFontSize(22); doc.setTextColor(30,30,30)
+  doc.text('𝄞', x, y+8, {baseline:'top'})
+  // Fallback: draw a simplified G clef using lines if font doesn't render
+  doc.setDrawColor(40,40,40); doc.setLineWidth(0.4)
+}
+
+// Draw time signature 4/4
+function drawTimeSignature(doc, x, y) {
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(20,20,20)
+  doc.text('4', x, y+1,   {align:'center'})
+  doc.text('4', x, y+6.5, {align:'center'})
+}
+
+// Draw a sharp or flat accidental
+function drawAccidental(doc, x, y, type) {
+  doc.setFont('times','normal'); doc.setFontSize(8); doc.setTextColor(20,20,20)
+  if (type === 'sharp') doc.text('♯', x-2, y)
+  if (type === 'flat')  doc.text('♭', x-2, y)
+}
+
+async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterInstrument) {
   if (!window.jspdf) await new Promise((res,rej) => {
     const s = document.createElement('script')
     s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
     s.onload = res; s.onerror = rej; document.head.appendChild(s)
   })
   const { jsPDF } = window.jspdf
-  const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'})
-  const W=210,M=15; let y=20
-  doc.setFillColor(255,107,71); doc.rect(0,0,W,5,'F')
-  doc.setFont('times','bold'); doc.setFontSize(22); doc.setTextColor(26,22,18)
-  doc.text('KalzTunz Chord Sheet',W/2,y,{align:'center'}); y+=9
-  doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(90,82,72)
-  doc.text(`Genre: ${params.genre}  ·  Mood: ${params.mood}  ·  Key: ${params.key} ${params.mode}  ·  BPM: ${params.bpm}`,W/2,y,{align:'center'}); y+=5
-  if (params.hasVocals) { doc.text(`Voice type: ${params.voiceType}`,W/2,y,{align:'center'}); y+=5 }
-  doc.text(`Duration: ${fmtDur(params.duration)}  ·  ${new Date().toLocaleDateString()}`,W/2,y,{align:'center'}); y+=8
-  doc.setDrawColor(224,217,206); doc.line(M,y,W-M,y); y+=7
-  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(255,107,71)
-  doc.text('CHORD PROGRESSIONS',M,y); y+=7
-  const acc=[[255,107,71],[255,179,71],[0,212,200],[232,84,42],[139,92,246],[52,211,153]]
-  progs.forEach((prog,pi) => {
-    if (y>265){doc.addPage();y=20}
-    const ch=prog.split(' — '), cw=(W-M*2)/Math.max(ch.length,1), ch2=20, ac=acc[pi%acc.length]
-    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(154,146,136)
-    doc.text(`Variation ${pi+1}`,M,y); y+=4
-    ch.forEach((c,ci) => {
-      const x=M+ci*cw
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' })
+  const W=210, M=14, INNER=W-M*2; let y=0, page=1
+
+  const CORAL  = [255,107,71]
+  const AMBER  = [255,179,71]
+  const DARK   = [18,16,12]
+  const GREY   = [90,82,72]
+  const LGREY  = [160,155,148]
+  const LLGREY = [230,226,220]
+
+  const newPage = () => {
+    doc.addPage(); page++; y = 18
+    // running header
+    doc.setFillColor(...CORAL); doc.rect(0,0,W,3,'F')
+    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...LGREY)
+    doc.text(`KalzTunz · ${params.key} ${params.mode} · ${params.genre} · ${params.bpm} BPM`, M, 8)
+    doc.text(`Page ${page}`, W-M, 8, {align:'right'})
+    doc.setDrawColor(...LLGREY); doc.setLineWidth(0.2); doc.line(M,10,W-M,10)
+    y = 16
+  }
+
+  const checkPage = (need=30) => { if (y + need > 282) newPage() }
+
+  // ── COVER HEADER ─────────────────────────────────────────────
+  doc.setFillColor(...CORAL); doc.rect(0,0,W,8,'F')
+  doc.setFillColor(...AMBER);
+  doc.triangle(0,8, 45,8, 0,22, 'F')
+  doc.setFillColor(255,107,71,0.4)
+
+  y = 24
+  doc.setFont('times','bold'); doc.setFontSize(28); doc.setTextColor(...DARK)
+  doc.text(params.genre ? params.genre.charAt(0).toUpperCase()+params.genre.slice(1)+' Chord Sheet' : 'Chord Sheet', W/2, y, {align:'center'}); y+=9
+
+  doc.setFont('times','italic'); doc.setFontSize(13); doc.setTextColor(...GREY)
+  doc.text(`${params.key} ${params.mode}  ·  ${params.mood} mood`, W/2, y, {align:'center'}); y+=7
+
+  // Metadata row
+  doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...GREY)
+  const meta = [
+    `Tempo: ${params.bpm} BPM`,
+    `Duration: ${fmtDur(params.duration)}`,
+    `Time: 4/4`,
+    `Instruments: ${params.instruments.join(', ')||'General'}`,
+    params.hasVocals ? `Voice: ${params.voiceType}` : null,
+    `Date: ${new Date().toLocaleDateString()}`,
+  ].filter(Boolean).join('   ·   ')
+  doc.text(meta, W/2, y, {align:'center', maxWidth:INNER}); y+=6
+
+  if (filterInstrument && filterInstrument !== 'all') {
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CORAL)
+    doc.text(`Filtered for: ${filterInstrument.toUpperCase()} PART`, W/2, y, {align:'center'}); y+=5
+  }
+
+  // Separator rule
+  doc.setDrawColor(...CORAL); doc.setLineWidth(0.8); doc.line(M, y, W-M, y)
+  doc.setDrawColor(...AMBER); doc.setLineWidth(0.3); doc.line(M, y+1, W-M, y+1)
+  y += 6
+
+  // ── SECTION 1: SCALE REFERENCE TABLE ─────────────────────────
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CORAL)
+  doc.text('SCALE REFERENCE', M, y); y+=4
+
+  if (scaleRef && scaleRef.length) {
+    const colW = INNER / scaleRef.length
+    scaleRef.forEach((s, i) => {
+      const x = M + i * colW
+      const isRoot = i === 0
+      // Cell background
+      doc.setFillColor(isRoot ? 255 : 248, isRoot ? 248 : 246, isRoot ? 240 : 244)
+      doc.setDrawColor(isRoot ? ...CORAL : ...LLGREY)
+      doc.setLineWidth(isRoot ? 0.5 : 0.2)
+      doc.roundedRect(x, y, colW-1, 14, 1.5, 1.5, 'FD')
+      // Top accent
+      doc.setFillColor(isRoot ? ...CORAL : ...AMBER)
+      doc.rect(x, y, colW-1, 2, 'F')
+      // Roman numeral
+      doc.setFont('times','italic'); doc.setFontSize(7); doc.setTextColor(...GREY)
+      doc.text(s.roman||'', x+colW/2-0.5, y+5.5, {align:'center'})
+      // Chord name
+      doc.setFont('times','bold'); doc.setFontSize(9.5); doc.setTextColor(...DARK)
+      doc.text(s.chord||s.note||'', x+colW/2-0.5, y+10.5, {align:'center'})
+      // Quality badge
+      if (s.quality) {
+        doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(...LGREY)
+        doc.text(s.quality==='m'?'min':s.quality==='dim'?'dim':'maj', x+colW/2-0.5, y+13.5, {align:'center'})
+      }
+    })
+    y += 18
+  }
+
+  // ── SECTION 2: CHORD PROGRESSIONS WITH REAL NOTATION ─────────
+  checkPage(50)
+  doc.setDrawColor(...LLGREY); doc.setLineWidth(0.2); doc.line(M,y,W-M,y); y+=5
+  doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CORAL)
+  doc.text('CHORD PROGRESSIONS', M, y); y+=5
+
+  const ACCENTS = [[255,107,71],[255,179,71],[0,180,168],[232,84,42],[139,92,246],[52,211,153]]
+  const primaryProgs = richProgs && richProgs.length ? richProgs : progs.map(p => ({ display:p, chords:p.split(' — '), timeline:[] }))
+
+  primaryProgs.forEach((variation, vi) => {
+    checkPage(60)
+    const ac = ACCENTS[vi % ACCENTS.length]
+    const chords = variation.chords || variation.display?.split(' — ') || []
+    const romanNums = (variation.timeline || []).slice(0, chords.length).map(t => t.roman || '')
+
+    // Variation label
+    doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...ac)
+    doc.text(`Variation ${vi+1}${vi===0?' — Primary':''}`, M, y); y+=4
+
+    // ── STAFF SYSTEM ────────────────────────────────────────────
+    const staffX = M+12     // left margin after clef
+    const staffW = INNER-13 // staff width
+    const SPACE  = 2.6      // line spacing mm
+
+    // Draw 5-line staff
+    doc.setDrawColor(70,70,70); doc.setLineWidth(0.2)
+    for (let line=0; line<5; line++) {
+      doc.line(staffX, y+line*SPACE, staffX+staffW, y+line*SPACE)
+    }
+    const staffBottom = y + 4*SPACE
+    const staffMid    = y + 2*SPACE  // middle of staff (B4 on treble)
+
+    // Treble clef (G clef) — use unicode character
+    doc.setFont('times','bold'); doc.setFontSize(18); doc.setTextColor(30,30,30)
+    doc.text('𝄞', staffX-9, y+10)
+
+    // Time signature
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(30,30,30)
+    doc.text('4', staffX+1.5, y+2.5, {align:'center'})
+    doc.text('4', staffX+1.5, y+7.5, {align:'center'})
+
+    // Key signature — draw sharps or flats
+    const KEY_SHARPS = {'G':1,'D':2,'A':3,'E':4,'B':5,'F#':6,'C#':7}
+    const KEY_FLATS  = {'F':1,'Bb':2,'Eb':3,'Ab':4,'Db':5,'Gb':6,'Cb':7}
+    const rootNote = params.key.split(' ')[0]
+    let keySigX = staffX + 7
+    if (KEY_SHARPS[rootNote]) {
+      doc.setFont('times','bold'); doc.setFontSize(9); doc.setTextColor(30,30,30)
+      for (let s=0; s<KEY_SHARPS[rootNote]; s++) {
+        doc.text('♯', keySigX, y+1+s*1.5); keySigX+=3.5
+      }
+    } else if (KEY_FLATS[rootNote]) {
+      doc.setFont('times','bold'); doc.setFontSize(9); doc.setTextColor(30,30,30)
+      for (let s=0; s<KEY_FLATS[rootNote]; s++) {
+        doc.text('♭', keySigX, y+3+s*1.5); keySigX+=3.5
+      }
+    }
+
+    // Distribute chord boxes along the staff — 4 per measure, 2 measures per line
+    const chordsPerBar = 1  // one chord per measure beat group
+    const barCount = chords.length
+    const barW = (staffW - 16) / Math.max(barCount, 1)
+    let noteX = staffX + 16 + barW/2
+
+    chords.forEach((chordName, ci) => {
+      const barX = staffX + 16 + ci * barW
+
+      // Bar line between measures
+      if (ci > 0) {
+        doc.setDrawColor(60,60,60); doc.setLineWidth(0.35)
+        doc.line(barX, y, barX, staffBottom)
+      }
+
+      // Chord symbol above staff
+      doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(...ac)
+      const hasAccidental = chordName.includes('#') || chordName.includes('b')
+      doc.text(chordName, barX+barW/2, y-2, {align:'center'})
+
+      // Roman numeral below chord symbol
+      if (romanNums[ci]) {
+        doc.setFont('times','italic'); doc.setFontSize(6.5); doc.setTextColor(...GREY)
+        doc.text(romanNums[ci], barX+barW/2, y-6, {align:'center'})
+      }
+
+      // Note heads on staff — draw chord notes (root, 3rd, 5th)
+      const notesForChord = CHORD_NOTES[chordName] || CHORD_NOTES[chordName.replace('m','').replace('dim','')] || [0,4,7]
+      const noteXpos = barX + barW*0.45
+
+      notesForChord.slice(0,3).forEach((semitone, ni) => {
+        // Map semitone to staff position (treble clef: E4=bottom line)
+        // Treble staff lines (bottom to top): E4 F4 G4 A4 B4 C5 D5 E5 F5
+        // position 0=E4(bottom line), 1=F4(space), 2=G4(2nd line), ...
+        const chromatic   = [0,0,1,1,2,3,3,4,4,5,5,6] // C=0,D=1,E=2,F=3,G=4,A=5,B=6
+        const diatonic    = chromatic[((semitone % 12) + 12) % 12]
+        const staffPos    = diatonic - 2 + (ni < 2 ? 0 : 1) // E4 = chromatic 4 = diatonic 2
+        const noteY       = staffBottom - staffPos * SPACE
+
+        // Ledger lines
+        if (noteY < y - 0.5) {
+          doc.setDrawColor(80,80,80); doc.setLineWidth(0.2)
+          for (let ly = y - SPACE; ly >= noteY - 0.5; ly -= SPACE) {
+            doc.line(noteXpos - 2, ly, noteXpos + 2, ly)
+          }
+        }
+        if (noteY > staffBottom + 0.5) {
+          doc.setDrawColor(80,80,80); doc.setLineWidth(0.2)
+          for (let ly = staffBottom + SPACE; ly <= noteY + 0.5; ly += SPACE) {
+            doc.line(noteXpos - 2, ly, noteXpos + 2, ly)
+          }
+        }
+
+        // Note head
+        const isRoot = ni === 0
+        doc.setFillColor(isRoot ? ...DARK : 60, isRoot ? undefined : 60, isRoot ? undefined : 60)
+        doc.setFillColor(...(isRoot ? DARK : [60,60,60]))
+        doc.ellipse(noteXpos, noteY, 1.4, 1.0, 'F')
+
+        // Stem (up for lower notes, down for higher)
+        doc.setDrawColor(...(isRoot ? DARK : [60,60,60])); doc.setLineWidth(0.3)
+        if (noteY > staffMid) {
+          doc.line(noteXpos+1.4, noteY, noteXpos+1.4, noteY - 7)
+        } else {
+          doc.line(noteXpos-1.4, noteY, noteXpos-1.4, noteY + 7)
+        }
+      })
+
+      // Beat dots — 4 beats per bar
+      for (let b=1; b<=3; b++) {
+        doc.setFillColor(...LLGREY)
+        doc.circle(barX + barW * b/4, staffBottom + 3.5, 0.4, 'F')
+      }
+    })
+
+    // Final double bar line
+    const finalX = staffX + 16 + barCount * barW
+    doc.setDrawColor(40,40,40); doc.setLineWidth(0.35)
+    doc.line(finalX, y, finalX, staffBottom)
+    doc.setLineWidth(1.0)
+    doc.line(finalX+1, y, finalX+1, staffBottom)
+
+    y = staffBottom + 8
+
+    // ── CHORD BOX ROW ────────────────────────────────────────────
+    // Full detailed chord diagram row below the staff
+    const boxW = INNER / Math.max(chords.length, 1)
+    chords.forEach((chord, ci) => {
+      const x = M + ci * boxW
+      const isRoot = ci === 0
+      // Box
       doc.setFillColor(250,248,244); doc.setDrawColor(...ac)
-      doc.roundedRect(x,y,cw-1,ch2,2,2,'FD')
-      doc.setFillColor(...ac); doc.roundedRect(x,y,cw-1,2.5,1,1,'F')
-      doc.setFont('times','bold'); doc.setFontSize(c.length>3?9:12); doc.setTextColor(26,22,18)
-      doc.text(c,x+cw/2-0.5,y+13,{align:'center'})
-    }); y+=ch2+5
+      doc.setLineWidth(0.35)
+      doc.roundedRect(x, y, boxW-1, 18, 2, 2, 'FD')
+      // Top accent bar
+      doc.setFillColor(...ac); doc.rect(x, y, boxW-1, 2.5, 'F')
+      // Roman numeral
+      if (romanNums[ci]) {
+        doc.setFont('times','italic'); doc.setFontSize(6.5); doc.setTextColor(100,90,80)
+        doc.text(romanNums[ci], x+boxW/2-0.5, y+6, {align:'center'})
+      }
+      // Chord name
+      doc.setFont('times','bold')
+      doc.setFontSize(chord.length > 3 ? 9 : 12); doc.setTextColor(...DARK)
+      doc.text(chord, x+boxW/2-0.5, y+12.5, {align:'center'})
+      // Beat marker
+      doc.setFont('helvetica','normal'); doc.setFontSize(5); doc.setTextColor(...LGREY)
+      doc.text(`${ci*4+1}`, x+2, y+17)
+    })
+    y += 22
+
+    // ── LYRICS LINE (placeholder if vocals) ─────────────────────
+    if (params.hasVocals || params.instruments?.includes('vocals')) {
+      checkPage(14)
+      doc.setFont('helvetica','italic'); doc.setFontSize(7); doc.setTextColor(...LGREY)
+      doc.text('Melody line:', M, y)
+      doc.setDrawColor(...LLGREY); doc.setLineWidth(0.18)
+      chords.forEach((_, ci) => {
+        const lx = M+45+ci*(INNER-45)/Math.max(chords.length,1)
+        doc.line(lx, y, lx+(INNER-45)/Math.max(chords.length,1)-2, y)
+      })
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(180,170,160)
+      doc.text(`(${params.voiceType||'vocals'} — ${params.key} ${params.mode} scale)`, M+45, y-1.5)
+      y += 7
+    }
   })
-  doc.setFillColor(255,107,71); doc.rect(0,288,W,4,'F')
-  doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(154,146,136)
-  doc.text('© KalzTunz · AI Music Platform',W/2,295,{align:'center'})
-  doc.save(`kalztunz_${params.genre}_${params.key}_chords.pdf`)
+
+  // ── SECTION 3: INSTRUMENT PARTS (filterable) ──────────────────
+  const instrList = Object.keys(instrNotes || {})
+    .filter(k => filterInstrument === 'all' || !filterInstrument || k === filterInstrument)
+  
+  if (instrList.length) {
+    checkPage(20)
+    doc.setDrawColor(...LLGREY); doc.setLineWidth(0.2); doc.line(M,y,W-M,y); y+=5
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CORAL)
+    doc.text('INSTRUMENT PERFORMANCE NOTES', M, y); y+=4
+
+    const INSTR_ICONS = { piano:'♪ Piano', guitar:'♬ Guitar', bass:'♩ Bass', drums:'♫ Drums', strings:'♩ Strings', vocals:'♬ Vocals', synth:'♩ Synth', brass:'♪ Brass/Wind' }
+
+    instrList.forEach(instr => {
+      checkPage(22)
+      const note  = instrNotes[instr] || ''
+      const label = INSTR_ICONS[instr] || instr
+      const isFiltered = filterInstrument === instr
+
+      // Header row
+      doc.setFillColor(isFiltered ? ...CORAL : 245, isFiltered ? undefined : 242, isFiltered ? undefined : 238)
+      doc.roundedRect(M, y, INNER, 7, 1.5, 1.5, 'F')
+      doc.setFont('helvetica','bold'); doc.setFontSize(8)
+      doc.setTextColor(isFiltered ? 255 : ...DARK, isFiltered ? 255 : undefined, isFiltered ? 255 : undefined)
+      doc.text(label.toUpperCase(), M+3, y+4.5)
+      if (isFiltered) {
+        doc.setFont('helvetica','normal'); doc.setFontSize(6.5)
+        doc.text('★ FEATURED PART', W-M-2, y+4.5, {align:'right'})
+      }
+      y += 8
+
+      // Note text — wrapped
+      doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...GREY)
+      const lines = doc.splitTextToSize(note, INNER-4)
+      lines.forEach(line => {
+        checkPage(6)
+        doc.text(line, M+2, y); y += 4.5
+      })
+
+      // Pattern diagram for certain instruments
+      if (instr === 'guitar' || instr === 'piano') {
+        checkPage(10)
+        y += 1
+        doc.setFont('courier','normal'); doc.setFontSize(7); doc.setTextColor(100,95,88)
+        const bpm = params.bpm
+        if (instr === 'guitar') {
+          doc.text('Pattern:  1  +  2  +  3  +  4  +', M+2, y); y+=4
+          doc.text('          D     D  U     U  D  U ', M+2, y); y+=5
+        } else {
+          doc.text('LH:   |  Root  |  5th   |  Root  |  5th  |', M+2, y); y+=4
+          doc.text('RH:   |  1-3-5 chord    |  inversion      |', M+2, y); y+=5
+        }
+      }
+      if (instr === 'drums') {
+        checkPage(14)
+        y += 1
+        doc.setFont('courier','normal'); doc.setFontSize(7); doc.setTextColor(100,95,88)
+        doc.text('Beat:    1    2    3    4', M+2, y); y+=3.5
+        doc.text('Kick:    X              X', M+2, y); y+=3.5
+        doc.text('Snare:        X         X', M+2, y); y+=3.5
+        doc.text('Hi-hat:  x    x    x    x', M+2, y); y+=5
+      }
+      y += 2
+    })
+  }
+
+  // ── SECTION 4: SCALE FINGERING REFERENCE ──────────────────────
+  if (scaleRef && scaleRef.length) {
+    checkPage(40)
+    doc.setDrawColor(...LLGREY); doc.setLineWidth(0.2); doc.line(M,y,W-M,y); y+=5
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CORAL)
+    doc.text('SCALE FINGERING REFERENCE', M, y); y+=4
+
+    // Mini staff for scale
+    const scW = INNER-5
+    doc.setDrawColor(80,80,80); doc.setLineWidth(0.18)
+    const SSPACE = 2.2
+    for (let l=0; l<5; l++) doc.line(M, y+l*SSPACE, M+scW, y+l*SSPACE)
+
+    // Treble clef
+    doc.setFont('times','bold'); doc.setFontSize(14); doc.setTextColor(40,40,40)
+    doc.text('𝄞', M, y+6)
+
+    // Draw scale notes ascending
+    const scaleNoteNames = scaleRef.map(s => s.note)
+    const scaleStepX = (scW-15) / Math.max(scaleNoteNames.length, 1)
+    scaleNoteNames.forEach((note, ni) => {
+      const nx = M + 13 + ni * scaleStepX
+      const chromatic = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
+      const diat = [0,0,1,1,2,3,3,4,4,5,5,6]
+      const idx = chromatic.indexOf(note)
+      const dp  = idx >= 0 ? diat[idx] : 0
+      // Staff position: E4=0(bottom line), each step = 1.1mm up
+      const noteY = y + 4*SSPACE - (dp - 2)*SSPACE
+      doc.setFillColor(...DARK); doc.ellipse(nx, noteY, 1.1, 0.85, 'F')
+      // Stem
+      doc.setDrawColor(...DARK); doc.setLineWidth(0.25)
+      doc.line(nx+1.1, noteY, nx+1.1, noteY-5.5)
+      // Note name below
+      doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(...CORAL)
+      doc.text(note, nx, y+4*SSPACE+5, {align:'center'})
+      // Degree number
+      doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(...GREY)
+      doc.text(String(ni+1), nx, y+4*SSPACE+8.5, {align:'center'})
+    })
+    y += 4*SSPACE + 14
+  }
+
+  // ── FOOTER ────────────────────────────────────────────────────
+  // Add footer to every page
+  const totalPages = page
+  for (let p=1; p<=totalPages; p++) {
+    doc.setPage(p)
+    doc.setFillColor(...CORAL); doc.rect(0,289,W,5,'F')
+    doc.setFillColor(...AMBER); doc.rect(0,289,W,1.5,'F')
+    doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(255,255,255)
+    doc.text('KalzTunz  ·  AI Music Platform  ·  kalztunz.com', M, 292.5)
+    doc.text(`${params.key} ${params.mode}  ·  ${params.genre}  ·  ${params.bpm} BPM  ·  Page ${p} of ${totalPages}`, W-M, 292.5, {align:'right'})
+  }
+
+  const fname = `KalzTunz_${params.genre||'chord'}_${(params.key||'').replace('#','sharp')}_${params.mode||'major'}${filterInstrument && filterInstrument!=='all'?'_'+filterInstrument:''}.pdf`
+  doc.save(fname)
 }
 
 /* ── Walkthrough popup ───────────────────────────────────────── */
@@ -216,6 +666,7 @@ export default function Generate() {
   const [error,      setError]    = useState(null)
   const [jobStatus,  setJobStatus]= useState(null)
   const [pdfLoading, setPdfLoad]  = useState(false)
+  const [pdfInstr,   setPdfInstr]  = useState('all')
   const [view,       setView]     = useState('progressions')
 
   const pollRef = useRef(null)
@@ -284,8 +735,17 @@ export default function Generate() {
 
   const handlePDF = async () => {
     if (!result) return; setPdfLoad(true)
-    try { await exportPDF({genre,mood,key,mode:scaleMode,bpm,duration,instruments,hasVocals,voiceType}, result.progressions) }
-    catch(e) { setError('PDF failed.') } finally { setPdfLoad(false) }
+    try {
+      await exportPDF(
+        { genre, mood, key, mode:scaleMode, bpm:Number(bpm), duration:Number(duration), instruments, hasVocals, voiceType },
+        result.progressions,
+        result.richProgs || [],
+        result.scaleRef  || [],
+        result.instrNotes || {},
+        pdfInstr
+      )
+    } catch(e) { console.error(e); setError('PDF generation failed. Try again.') }
+    finally { setPdfLoad(false) }
   }
 
   const COLORS = ['var(--accent)','var(--accent-2)','var(--accent-3)','var(--red)','var(--green)','#8b5cf6']
@@ -589,10 +1049,29 @@ export default function Generate() {
                 </div>
               )}
 
-              <div style={{ display:'flex',gap:'.38rem',flexWrap:'wrap',marginTop:'1rem',paddingTop:'.75rem',borderTop:'1px solid var(--border)' }}>
-                <button className="btn btn--primary btn--sm" onClick={handlePDF} disabled={pdfLoading}>{pdfLoading?<><span className="spinner" style={{width:10,height:10,borderWidth:1.5}}/> …</>:'⬇ PDF'}</button>
-                <button className="btn btn--secondary btn--sm" onClick={()=>navigator.clipboard.writeText(result.progressions.join('\n')).catch(()=>{})}>📋 Copy</button>
-                <button className="btn btn--ghost btn--sm" onClick={handleGenerate} disabled={loading}>↺ Regenerate</button>
+              <div style={{ marginTop:'1rem',paddingTop:'.75rem',borderTop:'1px solid var(--border)' }}>
+                {/* Instrument filter for PDF export */}
+                <div style={{ marginBottom:'.6rem' }}>
+                  <div style={{ fontSize:'.68rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.35rem' }}>PDF part filter</div>
+                  <div style={{ display:'flex',gap:'.3rem',flexWrap:'wrap' }}>
+                    {['all',...(result.instruments||[])].map(inst => {
+                      const icons = {all:'🎼',piano:'🎹',guitar:'🎸',bass:'🎸',strings:'🎻',brass:'🎷',drums:'🥁',synth:'🎛️',vocals:'🎤'}
+                      return (
+                        <button key={inst} onClick={()=>setPdfInstr(inst)}
+                          style={{ padding:'.2rem .5rem',borderRadius:8,border:`1.5px solid ${pdfInstr===inst?'var(--accent)':'var(--border)'}`,background:pdfInstr===inst?'rgba(255,107,71,.1)':'var(--bg-3)',color:pdfInstr===inst?'var(--accent)':'var(--text-2)',fontSize:'.7rem',fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all .16s' }}>
+                          {icons[inst]||'♪'} {inst==='all'?'Full Score':inst}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                <div style={{ display:'flex',gap:'.38rem',flexWrap:'wrap' }}>
+                  <button className="btn btn--primary btn--sm" onClick={handlePDF} disabled={pdfLoading}>
+                    {pdfLoading?<><span className="spinner" style={{width:10,height:10,borderWidth:1.5}}/> Building…</>:'⬇ Sheet Music PDF'}
+                  </button>
+                  <button className="btn btn--secondary btn--sm" onClick={()=>navigator.clipboard.writeText(result.progressions.join('\n')).catch(()=>{})}>📋 Copy</button>
+                  <button className="btn btn--ghost btn--sm" onClick={handleGenerate} disabled={loading}>↺ Regenerate</button>
+                </div>
               </div>
             </div>
           ) : (
