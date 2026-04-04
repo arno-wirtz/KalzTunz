@@ -263,7 +263,7 @@ export default function Extraction() {
   }
 
   return (
-    <div className="page-wrap" style={{ paddingTop:'2rem' }}>
+    <div className="page-wrap page--extract" style={{ paddingTop:'2rem' }}>
 
       {/* ── Header ── */}
       <div className="page-header" style={{ marginBottom:'1.75rem' }}>

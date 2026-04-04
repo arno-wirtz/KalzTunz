@@ -253,7 +253,7 @@ function AppInner() {
           <Route path="/search"        element={<Search />} />
           <Route path="/extract"       element={<Extraction />} />
           <Route path="/generate"      element={<Generate />} />
-          <Route path="/library"       element={<Protected><Library /></Protected>} />
+          <Route path="/library"       element={<Library />} />
           <Route path="/settings"      element={<Protected><Settings /></Protected>} />
           <Route path="/login"         element={<Login />} />
           <Route path="/register"      element={<Register />} />

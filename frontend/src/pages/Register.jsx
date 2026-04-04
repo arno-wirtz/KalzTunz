@@ -25,13 +25,15 @@ const EyeIcon = ({ open }) => open
 /* Password strength meter */
 function StrengthMeter({ password }) {
   const checks = [
-    { label: 'At least 8 characters', pass: password.length >= 8 },
-    { label: 'Uppercase letter',       pass: /[A-Z]/.test(password) },
-    { label: 'Lowercase letter',       pass: /[a-z]/.test(password) },
-    { label: 'Number',                 pass: /\d/.test(password) },
-    { label: 'Special character',      pass: /[!@#$%^&*()_+\-=[\]{};':",.<>?]/.test(password) },
+    { label: 'At least 8 characters',   pass: password.length >= 8,     required: true  },
+    { label: 'Lowercase letter',        pass: /[a-z]/.test(password),   required: true  },
+    { label: 'Number',                  pass: /\d/.test(password),       required: true  },
+    { label: 'Uppercase (recommended)', pass: /[A-Z]/.test(password),   required: false },
+    { label: 'Special char (bonus)',    pass: /[!@#$%^&*()_+\-=[\]{};':",.<>?]/.test(password), required: false },
   ]
   const score = checks.filter(c => c.pass).length
+  const requiredPassed = checks.filter(c => c.required && c.pass).length
+  const requiredTotal  = checks.filter(c => c.required).length
   const colors = ['#ef4444','#f59e0b','#f59e0b','#22c55e','#22c55e']
   const labels = ['','Weak','Fair','Good','Strong','Very Strong']
 
@@ -94,8 +96,8 @@ export default function Register() {
     if (!/^[a-zA-Z0-9_-]+$/.test(username)) return 'Username: letters, numbers, _ and - only'
     if (!email.includes('@')) return 'Enter a valid email address'
     if (password.length < 8) return 'Password must be at least 8 characters'
-    if (!/[A-Z]/.test(password)) return 'Password needs an uppercase letter'
-    if (!/\d/.test(password)) return 'Password needs a number'
+    if (!/[a-z]/.test(password)) return 'Password needs at least one lowercase letter'
+    if (!/\d/.test(password)) return 'Password needs at least one number'
     if (password !== confirm) return 'Passwords do not match'
     return null
   }

@@ -699,3 +699,157 @@ div:hover > .history-del-btn, div:hover .history-del-btn { opacity:1!important; 
   .settings-nav { position:static;display:flex;flex-wrap:wrap;gap:0; }
   .settings-nav-item { flex:0 0 auto; }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE TEXT VISIBILITY FIXES
+   (elements that were rendering near-invisible in dark mode)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Ensure form inputs always have visible text */
+.form-input, .form-select, .form-textarea {
+  color: var(--text) !important;
+}
+.form-input::placeholder, .form-textarea::placeholder { color: var(--text-3) !important; }
+
+/* Labels always visible */
+.form-label { color: var(--text-2) !important; }
+
+/* Settings rows */
+.settings-row__label { color: var(--text) !important; }
+.settings-section__title { color: var(--text) !important; }
+
+/* Modal text */
+.artist-modal__name { color: #fff !important; }
+
+/* Badge text legibility */
+.badge--coral { color: var(--accent) !important; }
+.badge--green  { color: var(--green) !important; }
+.badge--blue   { color: var(--accent-3) !important; }
+
+/* Chord pill confidence (cyan) visible in both modes */
+.chord-pill__conf { color: var(--accent-3) !important; }
+
+/* Auth form panel text in light mode */
+[data-theme="light"] .auth-form-panel { color: var(--text) !important; }
+[data-theme="light"] .form-label      { color: var(--text-2) !important; }
+
+/* Nav links dark mode: text-2 is now dark enough to read */
+[data-theme="dark"] .nav-link { color: var(--text-2) !important; }
+[data-theme="dark"] .nav-link:hover, [data-theme="dark"] .nav-link.active { color: var(--text) !important; }
+
+/* Dropdown items must be legible */
+[data-theme="dark"] .nav-drop-item { color: var(--text-2) !important; }
+[data-theme="dark"] .nav-drop-name { color: var(--text) !important; }
+
+/* Search bar input text */
+.search-bar input { color: var(--text) !important; }
+
+/* Upload zone text */
+.upload-zone__title { color: var(--text) !important; }
+.upload-zone__sub   { color: var(--text-2) !important; }
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT MODE — COSMIC PAGE THEMES
+   Out-of-this-world: space teal, burnt red, deep indigo, starfield
+   Applied per route via body class (.page--extract, .page--generate, .page--search)
+   The page-wrap gets the theme. Pages themselves retain normal text.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Extraction page — deep space teal + starfield */
+[data-theme="light"] .page--extract {
+  --page-accent: #006e7a;
+  --page-tint:   rgba(0,110,122,.06);
+  --page-border: rgba(0,110,122,.2);
+  --page-glow:   0 0 32px rgba(0,180,200,.18);
+  background: linear-gradient(160deg,#eaf9fb 0%,#f4ffff 40%,#e8f4f0 100%);
+}
+[data-theme="light"] .page--extract .card {
+  background: rgba(255,255,255,.85);
+  border-color: rgba(0,110,122,.14);
+  backdrop-filter: blur(12px);
+}
+[data-theme="light"] .page--extract .page-header__badge {
+  background: rgba(0,110,122,.1);
+  border-color: rgba(0,110,122,.25);
+  color: #006e7a;
+}
+[data-theme="light"] .page--extract .page-header__title { color: #003a42; }
+[data-theme="light"] .page--extract .btn--primary {
+  background: linear-gradient(135deg,#006e7a,#00a896);
+  box-shadow: 0 4px 18px rgba(0,110,122,.28);
+}
+
+/* Generate page — burnt sienna + warm nebula */
+[data-theme="light"] .page--generate {
+  --page-accent: #8b2a0a;
+  --page-tint:   rgba(139,42,10,.06);
+  background: linear-gradient(160deg,#fff8f5 0%,#fff2ec 40%,#fdf5ee 100%);
+}
+[data-theme="light"] .page--generate .card {
+  background: rgba(255,255,255,.88);
+  border-color: rgba(139,42,10,.12);
+}
+[data-theme="light"] .page--generate .page-header__badge {
+  background: rgba(139,42,10,.1);
+  border-color: rgba(139,42,10,.22);
+  color: #8b2a0a;
+}
+[data-theme="light"] .page--generate .page-header__title { color: #5a1a04; }
+[data-theme="light"] .page--generate .btn--primary {
+  background: linear-gradient(135deg,#c0392b,#e74c3c);
+  box-shadow: 0 4px 18px rgba(192,57,43,.28);
+}
+
+/* Search/Discover page — deep indigo cosmos + electric blue */
+[data-theme="light"] .page--search {
+  --page-accent: #1a0a5c;
+  --page-tint:   rgba(26,10,92,.06);
+  background: linear-gradient(160deg,#f2f0ff 0%,#eeeaff 40%,#f0f4ff 100%);
+}
+[data-theme="light"] .page--search .card {
+  background: rgba(255,255,255,.86);
+  border-color: rgba(26,10,92,.11);
+}
+[data-theme="light"] .page--search .page-header__badge {
+  background: rgba(26,10,92,.09);
+  border-color: rgba(26,10,92,.2);
+  color: #2d1a8a;
+}
+[data-theme="light"] .page--search .page-header__title { color: #1a0a5c; }
+[data-theme="light"] .page--search .search-bar {
+  background: rgba(255,255,255,.9);
+  border-color: rgba(26,10,92,.2);
+}
+[data-theme="light"] .page--search .btn--primary {
+  background: linear-gradient(135deg,#3a1fc0,#5a3fdf);
+  box-shadow: 0 4px 18px rgba(58,31,192,.28);
+}
+
+/* Library page — warm vintage parchment gold */
+[data-theme="light"] .page--library {
+  background: linear-gradient(160deg,#fffbf2 0%,#fff8e8 40%,#fdf5dd 100%);
+}
+[data-theme="light"] .page--library .card { background: rgba(255,255,255,.9); border-color: rgba(160,120,40,.14); }
+[data-theme="light"] .page--library .page-header__title { color: #5a3a00; }
+
+/* Starfield texture overlay (purely decorative via pseudo) */
+[data-theme="light"] .page--extract::before,
+[data-theme="light"] .page--generate::before,
+[data-theme="light"] .page--search::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgba(0,0,0,.12) 0%, transparent 100%),
+    radial-gradient(1px 1px at 34% 62%, rgba(0,0,0,.09) 0%, transparent 100%),
+    radial-gradient(1px 1px at 67% 28%, rgba(0,0,0,.10) 0%, transparent 100%),
+    radial-gradient(1px 1px at 82% 75%, rgba(0,0,0,.08) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 48% 44%, rgba(0,0,0,.10) 0%, transparent 100%),
+    radial-gradient(1px 1px at 91% 12%, rgba(0,0,0,.08) 0%, transparent 100%),
+    radial-gradient(1px 1px at 5% 88%, rgba(0,0,0,.09) 0%, transparent 100%);
+}
+[data-theme="light"] .page--extract > *,
+[data-theme="light"] .page--generate > *,
+[data-theme="light"] .page--search > * { position: relative; z-index: 1; }

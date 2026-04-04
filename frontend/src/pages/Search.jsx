@@ -585,7 +585,7 @@ export default function Search() {
   const trending = TRENDING[searchType] || TRENDING['track,artist,album']
 
   return (
-    <div className="page-wrap" style={{ paddingTop:'2rem' }}>
+    <div className="page-wrap page--search" style={{ paddingTop:'2rem' }}>
 
       {/* Header */}
       <div className="page-header" style={{ marginBottom:'1.25rem' }}>

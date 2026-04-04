@@ -186,7 +186,7 @@ class Extraction(Base):
     original_filename = Column(String(500))
 
     chords            = Column(JSON, default=list)
-    metadata          = Column(JSON, default=dict)
+    extra_data        = Column(JSON, default=dict)  # renamed from metadata (reserved by SQLAlchemy Declarative API)
     filters           = Column(JSON, default=dict)
 
     file_url          = Column(String(500), nullable=True)
@@ -219,7 +219,7 @@ class Generation(Base):
     instruments   = Column(JSON, default=list)
     voice         = Column(String(50))
 
-    metadata      = Column(JSON, default=dict)
+    extra_data    = Column(JSON, default=dict)  # renamed from metadata
     audio_url     = Column(String(500), nullable=True)
     chord_sheet_url = Column(String(500), nullable=True)
     chords        = Column(JSON, default=list)
@@ -249,7 +249,7 @@ class LibraryItem(Base):
     item_type = Column(String(20))
     item_id   = Column(String(100))
     title     = Column(String(255))
-    metadata  = Column(JSON, default=dict)
+    extra_data = Column(JSON, default=dict)  # renamed from metadata
 
     created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
     added_at   = Column(DateTime(timezone=True), default=utcnow)

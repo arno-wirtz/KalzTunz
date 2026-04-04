@@ -43,8 +43,11 @@ def add_security_middleware(app: FastAPI) -> Limiter:
         app.add_middleware(HTTPSRedirectMiddleware)
 
     # Trusted hosts — split and strip whitespace to tolerate "host1, host2" env values
-    raw_hosts = os.getenv("ALLOWED_HOSTS", "localhost")
+    raw_hosts = os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,*.onrender.com")
     allowed_hosts = [h.strip() for h in raw_hosts.split(",") if h.strip()]
+    # Always allow the wildcard so Render / any reverse proxy works
+    if "*" not in allowed_hosts and "*.onrender.com" not in allowed_hosts:
+        allowed_hosts.append("*.onrender.com")
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 
     # CORS

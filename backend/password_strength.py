@@ -36,10 +36,9 @@ class PasswordValidator:
         else:
             score += 20
 
-        if not re.search(r"[A-Z]", password):
-            errors.append("Must contain an uppercase letter")
-        else:
-            score += 20
+        # Uppercase is recommended but not required — not required for registration
+        if re.search(r"[A-Z]", password):
+            score += 20  # bonus points only
 
         if not re.search(r"\d", password):
             errors.append("Must contain a digit")

@@ -291,7 +291,7 @@ export default function Generate() {
   const COLORS = ['var(--accent)','var(--accent-2)','var(--accent-3)','var(--red)','var(--green)','#8b5cf6']
 
   return (
-    <div className="page-wrap" style={{ paddingTop:'1.75rem' }}>
+    <div className="page-wrap page--generate" style={{ paddingTop:'1.75rem' }}>
       {showWalk && <Walkthrough onClose={()=>setShowWalk(false)}/>}
 
       {/* ── Header ── */}

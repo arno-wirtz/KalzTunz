@@ -290,6 +290,64 @@ async def get_me(current_user: User = Depends(get_current_user)):
         "last_login":     current_user.last_login.isoformat()  if current_user.last_login  else None,
     }
 
+@router.patch("/profile", summary="Update current user profile")
+async def update_profile(
+    username:     str = None,
+    bio:          str = None,
+    location:     str = None,
+    website:      str = None,
+    profile_pic:  str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update mutable profile fields. Only supplied fields are changed."""
+    if username and username != current_user.username:
+        if db.query(User).filter(User.username == username, User.id != current_user.id).first():
+            raise HTTPException(status_code=409, detail="Username already taken")
+        current_user.username = username
+    if bio         is not None: current_user.bio         = bio
+    if location    is not None: current_user.location    = location
+    if website     is not None: current_user.website     = website
+    if profile_pic is not None: current_user.profile_pic = profile_pic
+    db.commit(); db.refresh(current_user)
+    return {
+        "id":          str(current_user.id),
+        "username":    current_user.username,
+        "email":       current_user.email,
+        "profile_pic": current_user.profile_pic,
+        "bio":         current_user.bio or "",
+        "full_name":   current_user.full_name or "",
+        "location":    current_user.location or "",
+        "website":     current_user.website or "",
+        "verified":    current_user.verified,
+    }
+
+@router.post("/avatar", summary="Upload or set avatar from data URL / external URL")
+async def upload_avatar(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Accept a JSON body with {profile_pic: str} — a data URL or https URL."""
+    try:
+        body = await request.json()
+        url  = body.get("profile_pic", "")
+        if not url:
+            raise HTTPException(status_code=422, detail="profile_pic is required")
+        # Only allow data URLs and https:// for safety
+        if not (url.startswith("data:image/") or url.startswith("https://")):
+            raise HTTPException(status_code=422, detail="Only data URLs and https:// are accepted")
+        # Limit data URL size to ~2 MB base64
+        if url.startswith("data:") and len(url) > 2_800_000:
+            raise HTTPException(status_code=413, detail="Image too large. Max ~2 MB.")
+        current_user.profile_pic = url
+        db.commit()
+        return {"ok": True, "profile_pic": url}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 # ==================== GOOGLE OAUTH ====================
 
 @router.get("/google", summary="Redirect to Google OAuth consent screen")
