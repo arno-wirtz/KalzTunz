@@ -464,6 +464,8 @@ export default function Search() {
   const [searchType, setSearchType] = useState('track,artist,album')
   const [mood,       setMood]       = useState(null)
   const [activeMood, setActiveMood] = useState(null)
+  const [showMoreGenres, setShowMoreGenres] = useState(false)
+  const [showMoreMoods,  setShowMoreMoods]  = useState(false)
 
   const [tracks,     setTracks]     = useState([])
   const [artists,    setArtists]    = useState([])
@@ -773,21 +775,43 @@ export default function Search() {
         )}
       </div>
 
-      {/* ── Mood + Genre browse ── */}
+      {/* ── Genre browse ── */}
       {!query && (
-        <div style={{ marginBottom:'1.5rem' }}>
-          {/* Genre grid */}
-          <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.6rem' }}>
-            🎵 Browse by Genre
+        <div style={{ marginBottom:'1.4rem' }}>
+          <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.6rem' }}>
+            <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.06em' }}>🎵 Browse by Genre</div>
+            <div style={{ position:'relative' }}>
+              <button onClick={()=>setShowMoreGenres(o=>!o)}
+                style={{ display:'flex',alignItems:'center',gap:'.3rem',padding:'.24rem .65rem',borderRadius:999,border:'1px solid var(--border-hi)',background:'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.71rem',color:'var(--text-2)',transition:'all .18s' }}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border-hi)';e.currentTarget.style.color='var(--text-2)'}}>
+                More +{GENRE_BROWSE.length-5}
+                <svg width={9} height={9} viewBox="0 0 24 24" fill="currentColor" style={{transition:'transform .2s',transform:showMoreGenres?'rotate(180deg)':'none'}}><path d="M7 10l5 5 5-5z"/></svg>
+              </button>
+              {showMoreGenres && (
+                <div style={{ position:'absolute',right:0,top:'calc(100% + 6px)',background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:16,padding:'.55rem',zIndex:60,width:240,boxShadow:'var(--shadow)',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.35rem' }}
+                  onMouseLeave={()=>setShowMoreGenres(false)}>
+                  {GENRE_BROWSE.slice(5).map(g => (
+                    <button key={g.label} onClick={()=>{ setInputVal(g.query); executeSearch(g.query); setShowMoreGenres(false) }}
+                      style={{ display:'flex',alignItems:'center',gap:'.42rem',padding:'.45rem .6rem',borderRadius:10,border:`1px solid ${g.color}33`,background:`${g.color}0d`,cursor:'pointer',fontFamily:'inherit',transition:'all .18s',textAlign:'left' }}
+                      onMouseEnter={e=>{e.currentTarget.style.background=`${g.color}20`;e.currentTarget.style.borderColor=g.color}}
+                      onMouseLeave={e=>{e.currentTarget.style.background=`${g.color}0d`;e.currentTarget.style.borderColor=`${g.color}33`}}>
+                      <span style={{ fontSize:'1.05rem' }}>{g.emoji}</span>
+                      <span style={{ fontSize:'.73rem',fontWeight:700,color:g.color }}>{g.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(100px,1fr))',gap:'.5rem',marginBottom:'1.25rem' }}>
-            {GENRE_BROWSE.map(g => (
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'.5rem' }}>
+            {GENRE_BROWSE.slice(0,5).map(g => (
               <button key={g.label} onClick={() => { setInputVal(g.query); executeSearch(g.query) }}
-                style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.3rem',padding:'.65rem .4rem',borderRadius:12,border:`1.5px solid ${g.color}33`,background:`${g.color}10`,cursor:'pointer',fontFamily:'inherit',transition:'all .2s',color:'var(--text)' }}
+                style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.28rem',padding:'.62rem .3rem',borderRadius:12,border:`1.5px solid ${g.color}33`,background:`${g.color}10`,cursor:'pointer',fontFamily:'inherit',transition:'all .2s' }}
                 onMouseEnter={e=>{ e.currentTarget.style.background=`${g.color}22`; e.currentTarget.style.borderColor=g.color; e.currentTarget.style.transform='translateY(-2px)' }}
                 onMouseLeave={e=>{ e.currentTarget.style.background=`${g.color}10`; e.currentTarget.style.borderColor=`${g.color}33`; e.currentTarget.style.transform='none' }}>
-                <span style={{ fontSize:'1.3rem' }}>{g.emoji}</span>
-                <span style={{ fontSize:'.72rem',fontWeight:700,color:g.color }}>{g.label}</span>
+                <span style={{ fontSize:'1.25rem' }}>{g.emoji}</span>
+                <span style={{ fontSize:'.7rem',fontWeight:700,color:g.color }}>{g.label}</span>
               </button>
             ))}
           </div>
@@ -796,86 +820,39 @@ export default function Search() {
 
       {/* ── Mood strip ── */}
       <div style={{ marginBottom:'1.25rem' }}>
-        <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:'.55rem' }}>🎭 Browse by Mood</div>
-        <div style={{ display:'flex',gap:'.4rem',flexWrap:'wrap' }}>
-          {MOODS.map(m => (
-            <button key={m.key}
-              onClick={() => handleMood(m)} disabled={loading}
-              style={{
-                display:'flex',alignItems:'center',gap:'.35rem',
-                padding:'.35rem .8rem',borderRadius:999,
-                border:`1.5px solid ${activeMood===m.key ? m.color : m.color+'44'}`,
-                background: activeMood===m.key ? m.color : m.bg,
-                color: activeMood===m.key ? '#fff' : m.color,
-                fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',
-                cursor:'pointer',transition:'all .2s',
-              }}
-              onMouseEnter={e=>{ if(activeMood!==m.key){ e.currentTarget.style.background=m.bg; e.currentTarget.style.transform='translateY(-2px)' } }}
-              onMouseLeave={e=>{ if(activeMood!==m.key){ e.currentTarget.style.transform='none' } }}>
+        <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem' }}>
+          <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.06em' }}>🎭 Browse by Mood</div>
+          <div style={{ position:'relative' }}>
+            <button onClick={()=>setShowMoreMoods(o=>!o)}
+              style={{ display:'flex',alignItems:'center',gap:'.3rem',padding:'.24rem .65rem',borderRadius:999,border:'1px solid var(--border-hi)',background:'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.71rem',color:'var(--text-2)',transition:'all .18s' }}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border-hi)';e.currentTarget.style.color='var(--text-2)'}}>
+              More +{MOODS.length-5}
+              <svg width={9} height={9} viewBox="0 0 24 24" fill="currentColor" style={{transition:'transform .2s',transform:showMoreMoods?'rotate(180deg)':'none'}}><path d="M7 10l5 5 5-5z"/></svg>
+            </button>
+            {showMoreMoods && (
+              <div style={{ position:'absolute',right:0,top:'calc(100% + 6px)',background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:14,padding:'.5rem',zIndex:60,minWidth:185,boxShadow:'var(--shadow)',display:'flex',flexDirection:'column',gap:'.28rem' }}
+                onMouseLeave={()=>setShowMoreMoods(false)}>
+                {MOODS.slice(5).map(m => (
+                  <button key={m.key} onClick={()=>{ handleMood(m); setShowMoreMoods(false) }} disabled={loading}
+                    style={{ display:'flex',alignItems:'center',gap:'.5rem',padding:'.38rem .62rem',borderRadius:9,border:`1px solid ${activeMood===m.key?m.color:m.color+'33'}`,background:activeMood===m.key?m.color:m.bg,color:activeMood===m.key?'#fff':m.color,fontFamily:'inherit',fontWeight:700,fontSize:'.77rem',cursor:'pointer',transition:'all .18s' }}>
+                    {m.emoji} {m.label} <span style={{ marginLeft:'auto',fontSize:'.65rem',opacity:.7 }}>→</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+        <div style={{ display:'flex',gap:'.4rem',overflowX:'auto',paddingBottom:'.15rem' }}>
+          {MOODS.slice(0,5).map(m => (
+            <button key={m.key} onClick={() => handleMood(m)} disabled={loading}
+              style={{ display:'flex',alignItems:'center',gap:'.32rem',flexShrink:0,padding:'.33rem .82rem',borderRadius:999,border:`1.5px solid ${activeMood===m.key?m.color:m.color+'44'}`,background:activeMood===m.key?m.color:m.bg,color:activeMood===m.key?'#fff':m.color,fontFamily:'inherit',fontWeight:700,fontSize:'.77rem',cursor:'pointer',transition:'all .2s' }}
+              onMouseEnter={e=>{ if(activeMood!==m.key) e.currentTarget.style.transform='translateY(-2px)' }}
+              onMouseLeave={e=>{ if(activeMood!==m.key) e.currentTarget.style.transform='none' }}>
               {m.emoji} {m.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* ── Filter row ── */}
-      <div style={{ display:'flex',alignItems:'center',gap:'.6rem',flexWrap:'wrap',marginBottom:'1.25rem' }}>
-        <div style={{ display:'flex',background:'var(--bg-2)',border:'1px solid var(--border)',borderRadius:12,padding:3,gap:2 }}>
-          {[['tracks',`🎵 Tracks`,tracks.length],['artists',`👤 Artists`,artists.length],['albums',`💿 Albums`,albums.length]].map(([k,l,n])=>(
-            <button key={k} onClick={()=>setTab(k)} style={{
-              display:'flex',alignItems:'center',gap:'.4rem',
-              padding:'.32rem .85rem',borderRadius:9,border:'none',cursor:'pointer',
-              fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',transition:'all .2s',
-              background:tab===k?'var(--accent)':'transparent',
-              color:tab===k?'#fff':'var(--text-2)',
-            }}>
-              {l}
-              {n > 0 && <span style={{ background:tab===k?'rgba(255,255,255,.2)':'var(--bg-3)',borderRadius:999,padding:'0 .38rem',fontSize:'.65rem',fontWeight:800 }}>{n}</span>}
-            </button>
-          ))}
-        </div>
-        {(query || activeMood) && (
-          <button onClick={clearSearch} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.28rem .7rem',cursor:'pointer',fontSize:'.75rem',color:'var(--text-3)',fontFamily:'inherit',transition:'all .18s' }}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.color='var(--text-3)'}}>
-            ✕ Clear
-          </button>
-        )}
-      </div>
 
-      {/* Error */}
-      {spotify.error && <div className="alert alert--error" style={{ marginBottom:'1rem' }}>⚠ {spotify.error}</div>}
-
-      {/* Results header */}
-      <div className="search-results-header" style={{ marginBottom:'1rem' }}>
-        <h2 style={{ fontSize:'1rem',fontWeight:700 }}>
-          {mood ? `${mood.emoji} ${mood.label} Vibes` : query ? `Results for "${query}"` : 'Trending Now'}
-        </h2>
-        {loading && <span className="spinner" style={{ width:14,height:14,borderWidth:2 }}/>}
-        {!loading && <span className="search-results-count">{tab==='tracks'?`${tracks.length} tracks`:tab==='artists'?`${artists.length} artists`:`${albums.length} albums`}</span>}
-      </div>
-
-      {/* Results */}
-      {tab==='tracks' && (loading ? <div className="card-grid">{Array(8).fill(0).map((_,i)=><SkeletonCard key={i}/>)}</div>
-        : tracks.length>0
-          ? <div className="card-grid fade-up">{tracks.map((t,i)=><div key={t.id} className="fade-up" style={{ animationDelay:`${Math.min(i,6)*.04}s` }}><TrackCard track={t} onPlay={setNowPlaying} onLike={toggleLike} liked={liked.has(t.id)} onSave={toggleSave} saved={saved.has(t.id)} onArtistClick={openArtist}/></div>)}</div>
-          : <div className="lib-empty fade-up"><div className="lib-empty__icon">{mood?mood.emoji:'🎵'}</div><p className="lib-empty__text">{query?`No tracks for "${query}"`:'Search for tracks above'}</p></div>
-      )}
-
-      {tab==='artists' && (loading ? <div style={{ display:'flex',flexDirection:'column',gap:'.5rem' }}>{Array(5).fill(0).map((_,i)=><SkeletonRow key={i}/>)}</div>
-        : artists.length>0
-          ? <div style={{ display:'flex',flexDirection:'column',gap:'.5rem' }} className="fade-up">{artists.map((a,i)=><div key={a.id} className="fade-up" style={{ animationDelay:`${i*.05}s` }}><ArtistCard artist={a} onClick={()=>openArtist(a.id,a.name)}/></div>)}</div>
-          : <div className="lib-empty fade-up"><div className="lib-empty__icon">👤</div><p className="lib-empty__text">{query?`No artists for "${query}"`:'Search for artists above'}</p></div>
-      )}
-
-      {tab==='albums' && (loading ? <div className="card-grid">{Array(6).fill(0).map((_,i)=><SkeletonCard key={i}/>)}</div>
-        : albums.length>0
-          ? <div className="card-grid fade-up">{albums.map((a,i)=><div key={a.id} className="fade-up" style={{ animationDelay:`${Math.min(i,6)*.04}s` }}><AlbumCard album={a} onClick={()=>a.artist_id&&openArtist(a.artist_id,a.artist)}/></div>)}</div>
-          : <div className="lib-empty fade-up"><div className="lib-empty__icon">💿</div><p className="lib-empty__text">{query?`No albums for "${query}"`:'Search for albums above'}</p></div>
-      )}
-
-      {artistModal && <ArtistModal artistId={artistModal.id} onClose={()=>setArtistModal(null)} onPlay={t=>{setNowPlaying(t);setArtistModal(null)}} liked={liked} onLike={toggleLike}/>}
-      {nowPlaying  && <NowPlayingBar track={nowPlaying} onClose={()=>setNowPlaying(null)}/>}
-    </div>
-  )
-}

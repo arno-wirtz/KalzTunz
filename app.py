@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR          = Path(__file__).parent
 UPLOAD_DIR        = BASE_DIR / "uploads"
-FRONTEND_DIST     = BASE_DIR / "frontend" / "dist"
+FRONTEND_DIST     = BASE_DIR / "dist"  # vite builds to project root /dist
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 REDIS_URL         = os.environ.get("REDIS_URL", "redis://localhost:6379/0")

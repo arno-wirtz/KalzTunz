@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../App'
+import { ChordSynth, buildLocal, buildScaleRef, fmtDur, KEY_FREQS, chordFreqs, saveGenerationToLib } from '../utils/musicEngine'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -72,22 +73,15 @@ const VOICE_TYPES = [
 ]
 
 /* ── Music theory helpers ────────────────────────────────────── */
-const CHROMATIC = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
-const SCALE_INT = { major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], dorian:[0,2,3,5,7,9,10], mixolydian:[0,2,4,5,7,9,10], pentatonic:[0,2,4,7,9], blues:[0,3,5,6,7,10] }
-const CHORD_TY  = { major:['','','m','','','m','dim'], minor:['m','dim','','m','m','',''], dorian:['m','m','','','m','dim',''], mixolydian:['','m','dim','','m','m',''], pentatonic:['','m','m','',''], blues:['m','m','m','','m',''] }
-const MOOD_PROG = { happy:[[0,3,4,3],[0,4,5,3]], sad:[[0,5,3,6],[0,3,6,4]], energetic:[[0,4,5,4],[0,3,4,0]], calm:[[0,5,3,4],[0,3,5,4]], dark:[[0,6,3,7],[0,5,6,3]], romantic:[[0,5,3,4],[0,3,5,6]], epic:[[0,7,5,4],[0,5,7,4]], mysterious:[[0,1,5,0],[6,0,5,3]], uplifting:[[0,4,5,3],[0,3,4,5]] }
+// imported from musicEngine.js
+// imported from musicEngine.js
+// imported from musicEngine.js
+// imported from musicEngine.js
 
-function buildLocal(root, mode, mood, num) {
-  const ri  = CHROMATIC.indexOf(root)
-  const int = SCALE_INT[mode] || SCALE_INT.major
-  const ty  = CHORD_TY[mode] || CHORD_TY.major
-  const sc  = int.map(i => CHROMATIC[(ri+i)%12])
-  const tp  = MOOD_PROG[mood] || MOOD_PROG.happy
-  return Array.from({length:num}, (_,i) =>
-    tp[i%tp.length].map(d => `${sc[d%sc.length]}${ty[d%ty.length]||''}`).join(' — ')
-  )
-}
-function fmtDur(s) { return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}` }
+// imported from musicEngine.js
+
+// imported from musicEngine.js
+
 
 /* ═══════════════════════════════════════════════════════════════
    PROFESSIONAL SHEET MUSIC PDF GENERATOR
@@ -580,6 +574,171 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
   doc.save(fname)
 }
 
+/* ── Drag seek bar ─────────────────────────────────────────── */
+function SeekBar({ progress, onSeek }) {
+  const ref = useRef(null), drag = useRef(false)
+  const get = e => { const r=ref.current?.getBoundingClientRect(); if(!r)return 0; const cx=e.touches?e.touches[0].clientX:e.clientX; return Math.max(0,Math.min(1,(cx-r.left)/r.width)) }
+  const dn=e=>{drag.current=true;onSeek(get(e));window.addEventListener('mousemove',mv);window.addEventListener('mouseup',up);window.addEventListener('touchmove',mv,{passive:false});window.addEventListener('touchend',up)}
+  const mv=e=>{if(drag.current)onSeek(get(e))}
+  const up=()=>{drag.current=false;window.removeEventListener('mousemove',mv);window.removeEventListener('mouseup',up);window.removeEventListener('touchmove',mv);window.removeEventListener('touchend',up)}
+  return (
+    <div ref={ref} onMouseDown={dn} onTouchStart={dn} style={{flex:1,height:16,display:'flex',alignItems:'center',cursor:'pointer'}}>
+      <div style={{flex:1,height:3,background:'rgba(255,255,255,.15)',borderRadius:2,position:'relative'}}>
+        <div style={{position:'absolute',left:0,top:0,height:'100%',width:`${(progress||0)*100}%`,background:'linear-gradient(90deg,var(--accent),var(--accent-2))',borderRadius:2}}/>
+        <div style={{position:'absolute',top:'50%',left:`${(progress||0)*100}%`,transform:'translate(-50%,-50%)',width:11,height:11,borderRadius:'50%',background:'#fff',boxShadow:'0 1px 6px rgba(0,0,0,.4)'}}/>
+      </div>
+    </div>
+  )
+}
+
+/* ── Chord synth player hook ───────────────────────────────── */
+function useChordPlayer() {
+  const sRef=useRef(null)
+  const [playing,setPlaying]=useState(false)
+  const [paused,setPaused]=useState(false)
+  const [elapsed,setElapsed]=useState(0)
+  const [progress,setProgress]=useState(0)
+  const [curIdx,setCurIdx]=useState(0)
+  const [total,setTotal]=useState(0)
+  const get=()=>{if(!sRef.current)sRef.current=new ChordSynth();return sRef.current}
+  const load=useCallback((str,bpm)=>{
+    sRef.current?.stop()
+    const s=get();s.load(str,bpm);setTotal(s.duration);setElapsed(0);setProgress(0);setCurIdx(0);setPlaying(false);setPaused(false)
+    s.on('progress',({elapsed:el,progress:pr})=>{setElapsed(el);setProgress(pr)})
+    s.on('chordIdx',i=>setCurIdx(i))
+    s.on('end',()=>{setPlaying(false);setPaused(false);setElapsed(0);setProgress(0);setCurIdx(0)})
+  },[])
+  const play  =useCallback(()=>{get().play();  setPlaying(true); setPaused(false)},[])
+  const pause =useCallback(()=>{get().pause(); setPaused(true)},[])
+  const resume=useCallback(()=>{get().resume();setPaused(false);setPlaying(true)},[])
+  const stop  =useCallback(()=>{get().stop();  setPlaying(false);setPaused(false);setElapsed(0);setProgress(0);setCurIdx(0)},[])
+  const toggle=useCallback(()=>{if(!playing&&!paused)play();else if(paused)resume();else pause()},[playing,paused,play,pause,resume])
+  const seekTo=useCallback(f=>get().seekTo(f),[])
+  useEffect(()=>()=>sRef.current?.stop(),[])
+  return {playing,paused,elapsed,progress,curIdx,total,load,play,pause,resume,stop,toggle,seekTo}
+}
+
+/* ── Player bar ────────────────────────────────────────────── */
+function PlayerBar({player,chords,title}) {
+  const {playing,paused,elapsed,progress,curIdx,total,toggle,stop,seekTo}=player
+  if(!chords?.length)return null
+  return (
+    <div style={{background:'linear-gradient(135deg,var(--bg-3),var(--bg-2))',border:'1px solid var(--border-hi)',borderRadius:13,padding:'.68rem .95rem',marginBottom:'.85rem'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'.55rem',marginBottom:'.38rem'}}>
+        <button onClick={toggle} style={{width:33,height:33,borderRadius:'50%',background:'linear-gradient(135deg,var(--accent),var(--accent-2))',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0,boxShadow:'0 3px 10px rgba(255,107,71,.28)',transition:'transform .15s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'} onMouseLeave={e=>e.currentTarget.style.transform=''}>
+          {playing&&!paused?<svg width={12} height={12} viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>:<svg width={12} height={12} viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>}
+        </button>
+        {(playing||paused)&&<button onClick={stop} style={{width:24,height:24,borderRadius:'50%',border:'1px solid var(--border)',background:'var(--bg-4)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text-3)',flexShrink:0}}><svg width={8} height={8} viewBox="0 0 24 24" fill="currentColor"><rect x={4} y={4} width={16} height={16}/></svg></button>}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:'.73rem',fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{title||'Chord Progression'}</div>
+          <div style={{fontSize:'.63rem',color:'var(--text-3)'}}>{playing&&!paused?`▶ ${chords[curIdx]||''}…`:paused?'⏸ Paused':'Click ▶ to preview'}</div>
+        </div>
+        <span style={{fontSize:'.67rem',color:'var(--text-3)',fontFamily:"'Space Mono',monospace",flexShrink:0}}>{fmtDur(elapsed)}/{fmtDur(total)}</span>
+      </div>
+      <SeekBar progress={progress} onSeek={seekTo}/>
+      {(playing||paused)&&<div style={{display:'flex',gap:'.18rem',flexWrap:'wrap',marginTop:'.4rem'}}>{chords.map((c,i)=><div key={i} style={{padding:'.1rem .35rem',borderRadius:5,fontSize:'.62rem',fontWeight:800,fontFamily:"'Space Mono',monospace",background:i===curIdx?'var(--accent)':'var(--bg-4)',color:i===curIdx?'#fff':'var(--text-3)',transition:'all .15s'}}>{c}</div>)}</div>}
+    </div>
+  )
+}
+
+/* ── SVG Sheet Music ───────────────────────────────────────── */
+function SheetMusicView({result,player}) {
+  if(!result?.progressions?.length)return null
+  const progs=result.progressions
+  const scale=result.scaleRef||buildScaleRef(result.key||'C',result.mode||'major')
+  const COLORS=['var(--accent)','var(--accent-2)','var(--accent-3)','#e87a30','#8b5cf6','var(--green)']
+  const SP=10, NOTE_POS={C:5,D:6,E:0,F:1,G:2,A:3,B:4}
+  return (
+    <div style={{overflowX:'auto'}}>
+      {progs.map((prog,vi)=>{
+        const chords=prog.split(' — ').filter(Boolean),col=COLORS[vi%COLORS.length]
+        const BAR_W=Math.max(60,Math.min(90,640/Math.max(chords.length,1)))
+        const SVG_W=44+chords.length*BAR_W+8,isP=vi===0
+        return (
+          <div key={vi} style={{marginBottom:'1.1rem'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'.45rem',marginBottom:'.4rem'}}>
+              <div style={{width:9,height:9,borderRadius:'50%',background:col}}/>
+              <span style={{fontSize:'.7rem',fontWeight:700,color:col,textTransform:'uppercase',letterSpacing:'.06em'}}>Variation {vi+1}{vi===0?' — Primary':''}</span>
+              {isP&&player&&<button onClick={player.toggle} style={{marginLeft:'auto',padding:'.15rem .55rem',borderRadius:999,border:`1.5px solid ${col}`,background:`${col}12`,cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.68rem',color:col,transition:'all .18s'}}>{player.playing&&!player.paused?'⏸ Pause':'▶ Play'}</button>}
+            </div>
+            <svg width="100%" viewBox={`0 0 ${SVG_W} 130`} style={{display:'block',overflow:'visible'}}>
+              {[0,1,2,3,4].map(l=><line key={l} x1={0} y1={28+l*SP} x2={SVG_W} y2={28+l*SP} stroke="var(--border-hi)" strokeWidth={0.8}/>)}
+              <text x={4} y={62} fontSize={50} fontFamily="serif" fill="var(--text-2)" opacity={0.72}>𝄞</text>
+              <text x={38} y={40} fontSize={12} fontFamily="sans-serif" fontWeight="bold" fill="var(--text-2)" textAnchor="middle">4</text>
+              <text x={38} y={52} fontSize={12} fontFamily="sans-serif" fontWeight="bold" fill="var(--text-2)" textAnchor="middle">4</text>
+              {chords.map((chord,ci)=>{
+                const barX=44+ci*BAR_W,beatX=barX+BAR_W/2,isAct=isP&&player&&player.curIdx===ci&&(player.playing||player.paused)
+                const rn=chord.replace(/m$|dim$|aug$/,'').replace(/[^A-G]/g,''),nPos=NOTE_POS[rn]??2
+                const noteY=28+4*SP-nPos*(SP/2),stemUp=nPos<4,isMin=chord.endsWith('m')&&!chord.endsWith('dim'),thiCol=isAct?'var(--accent)':col
+                return (
+                  <g key={ci}>
+                    {isAct&&<rect x={barX} y={24} width={BAR_W} height={4*SP+14} fill={`${col}15`} rx={4}/>}
+                    {ci>0&&<line x1={barX} y1={28} x2={barX} y2={28+4*SP} stroke="var(--border)" strokeWidth={ci%4===0?1.1:0.5}/>}
+                    {scale[ci]&&<text x={beatX} y={22} fontSize={8} fontFamily="serif" fontStyle="italic" fill="var(--text-3)" textAnchor="middle">{scale[ci].roman}</text>}
+                    <text x={beatX} y={14} fontSize={11} fontFamily="'Playfair Display',serif" fontWeight="bold" fill={thiCol} textAnchor="middle">{chord}</text>
+                    {noteY>28+4*SP+2&&<line x1={beatX-8} y1={28+5*SP} x2={beatX+8} y2={28+5*SP} stroke="var(--text-2)" strokeWidth={0.7}/>}
+                    <ellipse cx={beatX} cy={noteY} rx={5} ry={3.8} fill={isAct?'var(--accent)':'var(--text)'} transform={`rotate(-12,${beatX},${noteY})`}/>
+                    <circle cx={beatX+2} cy={noteY-(isMin?3:4)*(SP/2)} r={3.2} fill={col} opacity={isAct?.65:.42}/>
+                    <circle cx={beatX} cy={noteY-3.5*(SP/2)} r={2.5} fill={col} opacity={isAct?.5:.28}/>
+                    {stemUp?<line x1={beatX+5} y1={noteY} x2={beatX+5} y2={noteY-26} stroke={isAct?'var(--accent)':'var(--text)'} strokeWidth={1.3}/>:<line x1={beatX-5} y1={noteY} x2={beatX-5} y2={noteY+26} stroke={isAct?'var(--accent)':'var(--text)'} strokeWidth={1.3}/>}
+                    {[1,2,3].map(b=><circle key={b} cx={barX+b*BAR_W/4} cy={28+4*SP+8} r={1.8} fill="var(--border-hi)"/>)}
+                    <rect x={barX+2} y={28+4*SP+14} width={BAR_W-4} height={22} rx={4} fill={`${col}12`} stroke={isAct?col:'var(--border)'} strokeWidth={isAct?1.2:.6}/>
+                    <rect x={barX+2} y={28+4*SP+14} width={BAR_W-4} height={3} rx={2} fill={col} opacity={isAct?1:.7}/>
+                    <text x={beatX} y={28+4*SP+28} fontSize={chord.length>3?9:11} fontFamily="'Playfair Display',serif" fontWeight="bold" fill={thiCol} textAnchor="middle">{chord}</text>
+                  </g>
+                )
+              })}
+              <line x1={44+chords.length*BAR_W} y1={28} x2={44+chords.length*BAR_W} y2={28+4*SP} stroke="var(--text)" strokeWidth={0.8}/>
+              <line x1={44+chords.length*BAR_W+2} y1={28} x2={44+chords.length*BAR_W+2} y2={28+4*SP} stroke="var(--text)" strokeWidth={2.2}/>
+            </svg>
+          </div>
+        )
+      })}
+      {scale.length>0&&(
+        <div style={{marginTop:'.75rem',borderTop:'1px solid var(--border)',paddingTop:'.75rem'}}>
+          <div style={{fontSize:'.68rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.5rem'}}>Scale: {result.key} {result.mode}</div>
+          <div style={{display:'flex',gap:'.25rem',flexWrap:'wrap'}}>
+            {scale.map((s,i)=><div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'.32rem .5rem',borderRadius:8,background:i===0?'rgba(255,107,71,.12)':'var(--bg-3)',border:`1px solid ${i===0?'var(--accent)':'var(--border)'}`,minWidth:38}}><span style={{fontSize:'.78rem',fontWeight:800,color:i===0?'var(--accent)':'var(--text)'}}>{s.chord}</span><span style={{fontSize:'.58rem',color:'var(--text-3)',fontStyle:'italic'}}>{s.roman}</span></div>)}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Share modal ───────────────────────────────────────────── */
+function ShareModal({result,onClose}) {
+  const [copied,setCopied]=useState(false)
+  if(!result)return null
+  const text=`🎵 KalzTunz — ${result.genre||'Chord'} Sheet
+Key: ${result.key} ${result.mode} · Mood: ${result.mood} · BPM: ${result.bpm}
+
+${result.progressions.slice(0,3).map((p,i)=>`${i+1}. ${p}`).join('
+')}
+
+Generate free at kalztunz.com`
+  const copy=()=>navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2200)}).catch(()=>{})
+  const share=p=>{const enc=encodeURIComponent(text);const u={whatsapp:`https://wa.me/?text=${enc}`,twitter:`https://twitter.com/intent/tweet?text=${enc}`,telegram:`https://t.me/share/url?url=https%3A%2F%2Fkalztunz.com&text=${enc}`};if(u[p])window.open(u[p],'_blank','noopener')}
+  const nat=()=>navigator.share?.({title:'KalzTunz Chord Sheet',text,url:'https://kalztunz.com'}).catch(()=>{})
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.72)',zIndex:800,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem'}} onClick={onClose}>
+      <div style={{width:'100%',maxWidth:400,background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:22,padding:'1.75rem',boxShadow:'0 24px 80px rgba(0,0,0,.55)'}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
+          <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:'1rem',fontWeight:800}}>Share Chord Sheet</h2>
+          <button onClick={onClose} style={{background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.18rem .55rem',cursor:'pointer',fontSize:'.72rem',color:'var(--text-3)',fontFamily:'inherit'}}>✕</button>
+        </div>
+        <div style={{background:'var(--bg-3)',borderRadius:10,padding:'.65rem',fontSize:'.72rem',fontFamily:"'Space Mono',monospace",lineHeight:1.65,color:'var(--text-2)',marginBottom:'1rem',maxHeight:100,overflowY:'auto',border:'1px solid var(--border)',whiteSpace:'pre-wrap'}}>{text}</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.45rem',marginBottom:'.6rem'}}>
+          {[{l:'WhatsApp',i:'📱',p:'whatsapp',c:'#22c55e'},{l:'Twitter/X',i:'🐦',p:'twitter',c:'#1d9bf0'},{l:'Telegram',i:'✈️',p:'telegram',c:'#0088cc'},{l:'Share…',i:'↗',p:'native',c:'var(--accent)'}].map(({l,i,p,c})=>(
+            <button key={p} onClick={()=>p==='native'?nat():share(p)} style={{display:'flex',alignItems:'center',gap:'.45rem',padding:'.48rem .65rem',borderRadius:10,border:`1.5px solid ${c}33`,background:`${c}0e`,cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',color:c,transition:'all .18s'}} onMouseEnter={e=>{e.currentTarget.style.background=`${c}20`}} onMouseLeave={e=>{e.currentTarget.style.background=`${c}0e`}}>{i} {l}</button>
+          ))}
+        </div>
+        <button onClick={copy} className="btn btn--secondary" style={{width:'100%',justifyContent:'center',background:copied?'rgba(52,211,153,.1)':'',borderColor:copied?'var(--green)':'',color:copied?'var(--green)':''}}>{copied?'✓ Copied!':'📋 Copy text'}</button>
+      </div>
+    </div>
+  )
+}
+
 /* ── Walkthrough popup ───────────────────────────────────────── */
 const WT = [
   { icon:'🎸', title:'Start with Genre', desc:'Pick your musical style first. Genre shapes which moods, scales and instruments make harmonic sense together.' },
@@ -667,6 +826,11 @@ export default function Generate() {
   const [jobStatus,  setJobStatus]= useState(null)
   const [pdfLoading, setPdfLoad]  = useState(false)
   const [pdfInstr,   setPdfInstr]  = useState('all')
+  const [view,       setView]      = useState('sheet')
+  const [showShare,  setShowShare] = useState(false)
+  const [saveMsg,    setSaveMsg]   = useState(null)
+  const player = useChordPlayer()
+  const [pdfInstr,   setPdfInstr]  = useState('all')
   const [view,       setView]     = useState('progressions')
 
   const pollRef = useRef(null)
@@ -708,7 +872,8 @@ export default function Generate() {
       scaleNotes: sRef.map(s=>s.note||''), scaleRef: sRef,
       instrNotes: r.instrument_notes||{}, isLocal: false,
     }))
-  }, [genre,mood,key,scaleMode,bpm,duration,instruments,voiceType])
+    if (progs.length) player.load(progs[0], r.bpm||Number(bpm))
+  }, [genre,mood,key,scaleMode,bpm,duration,instruments,voiceType,player])
 
   const handleGenerate = async () => {
     if (!canGen) return
@@ -717,7 +882,8 @@ export default function Generate() {
     const localProgs = buildLocal(key, scaleMode, mood, numVariations)
     const ri = CHROMATIC.indexOf(key)
     const sn = (SCALE_INT[scaleMode]||SCALE_INT.major).map(i=>CHROMATIC[(ri+i)%12])
-    setResult({ genre, mood, key, mode:scaleMode, bpm:Number(bpm), duration:Number(duration), instruments, voiceType, progressions:localProgs, richProgs:[], scaleNotes:sn, scaleRef:[], instrNotes:{}, isLocal:true })
+    setResult({ genre, mood, key, mode:scaleMode, bpm:Number(bpm), duration:Number(duration), instruments, voiceType, progressions:localProgs, richProgs:[], scaleNotes:sn, scaleRef:buildScaleRef(key,scaleMode), instrNotes:{}, isLocal:true })
+    if (localProgs.length) player.load(localProgs[0], Number(bpm))
     try {
       const fd = new FormData()
       fd.append('root_note', key); fd.append('scale_mode', scaleMode); fd.append('mood', mood)
@@ -732,6 +898,12 @@ export default function Generate() {
       pollJob(data.job_id)
     } catch(e) { setLoading(false); setError(`Showing local preview — backend: ${e.message}`) }
   }
+
+  const handleSave = useCallback(() => {
+    if (!result) return
+    saveGenerationToLib(result)
+    setSaveMsg('✓ Saved to Library!'); setTimeout(() => setSaveMsg(null), 2500)
+  }, [result])
 
   const handlePDF = async () => {
     if (!result) return; setPdfLoad(true)
@@ -752,7 +924,8 @@ export default function Generate() {
 
   return (
     <div className="page-wrap page--generate" style={{ paddingTop:'1.75rem' }}>
-      {showWalk && <Walkthrough onClose={()=>setShowWalk(false)}/>}
+      {showWalk && <Walkthrough onClose={()=>setShowWalk(false)}/>
+      }{showShare && <ShareModal result={result} onClose={()=>setShowShare(false)}/>}
 
       {/* ── Header ── */}
       <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'1rem',marginBottom:'1.5rem',flexWrap:'wrap' }}>
@@ -996,11 +1169,24 @@ export default function Generate() {
                   {result.isLocal ? <><span style={{color:'var(--accent-2)'}}>⚡</span> Preview</> : <><span style={{color:'var(--green)'}}>✅</span> Generated</>}
                 </div>
                 <div style={{ display:'flex',gap:'.28rem' }}>
-                  {[['progressions','🎵'],['scale','🎼']].map(([v,l]) => (
-                    <button key={v} onClick={()=>setView(v)} style={{ padding:'.22rem .5rem',borderRadius:8,border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.72rem',transition:'all .16s',background:view===v?'var(--accent)':'var(--bg-3)',color:view===v?'#fff':'var(--text-2)' }}>{l} {v}</button>
+                  {[['sheet','🎼 Sheet'],['progressions','🎵 Chords'],['scale','📐 Scale']].map(([v,l]) => (
+                    <button key={v} onClick={()=>setView(v)} style={{ padding:'.22rem .5rem',borderRadius:8,border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.7rem',transition:'all .16s',background:view===v?'var(--accent)':'var(--bg-3)',color:view===v?'#fff':'var(--text-2)' }}>{l}</button>
                   ))}
                 </div>
               </div>
+
+              {/* Audio player */}
+              <PlayerBar
+                player={player}
+                chords={result.progressions[0]?.split(' — ').filter(Boolean)||[]}
+                title={`${result.key} ${result.mode} · ${result.genre||''} · ${result.bpm} BPM`}
+              />
+
+              {view==='sheet' && (
+                <div style={{ overflowX:'auto' }}>
+                  <SheetMusicView result={result} player={player}/>
+                </div>
+              )}
 
               {view==='progressions' && (
                 <div style={{ display:'flex',flexDirection:'column',gap:'.55rem' }}>

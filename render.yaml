@@ -1,21 +1,31 @@
-# KalzTunz — Render.com deployment configuration
-# https://render.com/docs/yaml-spec
+# KalzTunz — Single unified Render deployment
+# One web service: builds React then serves it from FastAPI (no CORS, no split domains)
 
 services:
-  # ── Backend API ──────────────────────────────────────────
+
+  # ── Main web service (FastAPI + built React frontend) ─────────────
   - type: web
-    name: kalztunz-api
+    name: kalztunz
     runtime: python
-    region: ohio
+    region: oregon
     plan: free
     buildCommand: |
       pip install --upgrade pip
       pip install --only-binary=scipy -r requirements.txt
-    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT --workers 2
+      cd frontend && npm ci && npm run build && cd ..
+    startCommand: gunicorn -w 2 -k uvicorn.workers.UvicornWorker app:app --bind 0.0.0.0:$PORT --timeout 120
     healthCheckPath: /health
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11.0"
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: kalztunz.onrender.com,*.onrender.com,localhost,127.0.0.1
+      - key: CORS_ORIGINS
+        value: https://kalztunz.onrender.com
+      - key: FRONTEND_URL
+        value: https://kalztunz.onrender.com
       - key: DATABASE_URL
         fromDatabase:
           name: kalztunz-db
@@ -25,12 +35,8 @@ services:
           name: kalztunz-redis
           type: redis
           property: connectionString
-      - key: SECRET_KEY
-        generateValue: true
-      - key: FRONTEND_URL
-        value: https://kalztunz.onrender.com
-      - key: CORS_ORIGINS
-        value: https://kalztunz.onrender.com
+      - key: PYTHON_VERSION
+        value: "3.11.0"
       - key: SPOTIFY_CLIENT_ID
         sync: false
       - key: SPOTIFY_CLIENT_SECRET
@@ -43,48 +49,35 @@ services:
         sync: false
       - key: GITHUB_CLIENT_SECRET
         sync: false
-      - key: ALLOWED_HOSTS
-        value: localhost,127.0.0.1,kalztunz.onrender.com,kalztunz-api.onrender.com,*.onrender.com
-      - key: ENVIRONMENT
-        value: production
 
-  # ── Frontend (static site) ───────────────────────────────
-  - type: web
-    name: kalztunz
-    runtime: static
-    region: ohio
-    plan: free
-    buildCommand: cd frontend && npm ci && npm run build
-    staticPublishPath: ./frontend/dist
-    pullRequestPreviewsEnabled: false
-    routes:
-      - type: rewrite
-        source: /api/*
-        destination: https://kalztunz-api.onrender.com/api/:splat
-      - type: rewrite
-        source: /*
-        destination: /index.html
-
-  # ── RQ Worker ─────────────────────────────────────────────
+  # ── RQ background worker ───────────────────────────────────────────
   - type: worker
     name: kalztunz-worker
     runtime: python
-    region: ohio
+    region: oregon
     plan: free
     buildCommand: |
       pip install --upgrade pip
       pip install --only-binary=scipy -r requirements.txt
     startCommand: python worker.py
     envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kalztunz-db
+          property: connectionString
       - key: REDIS_URL
         fromService:
           name: kalztunz-redis
           type: redis
           property: connectionString
+      - key: PYTHON_VERSION
+        value: "3.11.0"
 
 databases:
   - name: kalztunz-db
-    region: ohio
-    plan: free
     databaseName: kalztunz
-    user: kalztunz_user
+    plan: free
+
+  - name: kalztunz-redis
+    plan: free
+    ipAllowList: []

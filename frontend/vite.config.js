@@ -1,44 +1,31 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// In production (Render), VITE_API_URL is '' so all /api calls hit same origin
+// In development, proxy forwards /api to the local FastAPI server
 export default defineConfig({
   plugins: [react()],
-
-  // Use the KalzTunz logo as favicon via public dir
   publicDir: 'public',
 
   server: {
     port: 5173,
-    open: true,
     proxy: {
-      '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
-        changeOrigin: true,
-        rewrite: path => path,
-      },
-      '/health': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/uploads': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
-        changeOrigin: true,
-      },
+      '/api':     { target: 'http://localhost:8000', changeOrigin: true },
+      '/health':  { target: 'http://localhost:8000', changeOrigin: true },
+      '/uploads': { target: 'http://localhost:8000', changeOrigin: true },
     },
   },
 
   build: {
-    outDir: 'dist',
+    // Build directly into the project root dist/ so FastAPI can serve it
+    outDir: '../dist',
+    emptyOutDir: true,
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          vendor:   ['react', 'react-dom', 'react-router-dom'],
-        },
+        manualChunks: { vendor: ['react','react-dom','react-router-dom'] },
       },
     },
   },
-
-  // Ensures env vars prefixed VITE_ are available in the app
   envPrefix: 'VITE_',
 })

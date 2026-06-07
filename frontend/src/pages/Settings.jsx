@@ -71,7 +71,15 @@ function AvatarModal({ currentSrc, onSave, onClose }) {
     try {
       // In production: POST to /api/auth/avatar with FormData
       // Here we persist to localStorage via updateUser
-      await new Promise(r => setTimeout(r, 600)) // simulate upload
+      const token = localStorage.getItem('kalztunz_token')
+      if (token) {
+        const res = await fetch(`${API}/api/auth/avatar`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile_pic: preview }),
+        })
+        if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.detail||'Upload failed') }
+      }
       onSave(preview)
       onClose()
     } catch (e) {
@@ -219,8 +227,17 @@ function AccountPanel() {
     setSaving(true); setMsg(null)
     try {
       // Simulate API call — in production: PATCH /api/auth/profile
-      await new Promise(r => setTimeout(r, 700))
-      updateUser({ username, bio, location, website })
+      const token = localStorage.getItem('kalztunz_token')
+      if (token) {
+        const res = await fetch(`${API}/api/auth/profile`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, bio, location, website }),
+        })
+        if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.detail||'Save failed') }
+        const updated = await res.json()
+        updateUser(updated)
+      } else { updateUser({ username, bio, location, website }) }
       setMsg({ type:'success', text:'Profile updated successfully ✓' })
     } catch {
       setMsg({ type:'error', text:'Failed to save. Please try again.' })

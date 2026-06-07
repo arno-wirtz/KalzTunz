@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
+import { ChordSynth, fmtDur as fmtDurEngine } from '../utils/musicEngine'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../App'
 
@@ -97,6 +98,33 @@ const DEFAULT_DATA = {
     ])
   }
 })()
+
+/* ── Generated-track chord player ────────────────────────────── */
+function useGenPlayer() {
+  const sRef = useRef(null)
+  const [st, setSt] = useState({ playing:false, paused:false, progress:0, elapsed:0, curChord:0, id:null })
+  const get = () => { if (!sRef.current) sRef.current = new ChordSynth(); return sRef.current }
+  const play = useCallback((item) => {
+    sRef.current?.stop()
+    if (!item.progressions?.length) return
+    const s = get()
+    s.load(item.progressions[0], item.bpm || 120)
+    setSt({ playing:false, paused:false, progress:0, elapsed:0, curChord:0, id:item.id })
+    s.on('progress', ({elapsed:el,progress:pr}) => setSt(p=>({...p,elapsed:el,progress:pr})))
+    s.on('chordIdx', i => setSt(p=>({...p,curChord:i})))
+    s.on('end', () => setSt(p=>({...p,playing:false,paused:false,progress:0,elapsed:0,curChord:0,id:null})))
+    s.play(); setSt(p=>({...p,playing:true,id:item.id}))
+  },[])
+  const toggle = useCallback((item) => {
+    const s = get()
+    if (st.id===item.id && st.playing)  { s.pause();  setSt(p=>({...p,playing:false,paused:true})) }
+    else if (st.id===item.id && st.paused) { s.resume(); setSt(p=>({...p,playing:true,paused:false})) }
+    else play(item)
+  },[st,play])
+  const stop = useCallback(()=>{ sRef.current?.stop(); setSt({playing:false,paused:false,progress:0,elapsed:0,curChord:0,id:null}) },[])
+  useEffect(()=>()=>sRef.current?.stop(),[])
+  return {...st, toggle, stop}
+}
 
 /* ── SVG icons ─────────────────────────────────────────────────── */
 const IconSearch   = () => <svg width={14} height={14} viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
@@ -708,10 +736,15 @@ export default function Library() {
   const isGuest  = !user
 
   // All data persists in localStorage — works offline
-  const [data, setData] = useState(() => {
-    const stored = loadLibraryData()
-    return stored || DEFAULT_DATA
-  })
+  const [data, setData] = useState(() => loadLibraryData() || DEFAULT_DATA)
+
+  // Re-read from localStorage when window gains focus — picks up saves from Generate/Extract
+  useEffect(() => {
+    const refresh = () => { const d = loadLibraryData(); if (d) setData(d) }
+    refresh() // immediate on mount
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [])
   const askConfirm = useCallback((message, detail, onConfirm) => {
     setConfirm({ message, detail, onConfirm })
   }, [])
@@ -734,6 +767,7 @@ export default function Library() {
   const [showHistory,    setShowHistory]    = useState(false)
 
   const { playing, paused, progress, elapsed, queue, playNow, playPlaylist, enqueue, clearQueue, togglePause, seekTo, playNext, playPrev, stopAll } = useMiniPlayer()
+  const genPlayer = useGenPlayer()
   const toggleTrack = useCallback((track) => { playing?.id === track.id ? togglePause() : playNow(track) }, [playing, togglePause, playNow])
 
   const counts = useMemo(() => ({
@@ -957,17 +991,27 @@ export default function Library() {
             {activeSection==='extractions'&&(
               filterI(extractions).length>0
                 ?<ColList>{filterI(extractions).map(item=>(
-                    <div key={item.id} className="lib-row">
-                      <div className="lib-row__cover" style={{ background:'var(--bg-3)' }}>🎸</div>
-                      <div className="lib-row__info">
-                        <div className="lib-row__title">{item.title}</div>
-                        <div className="lib-row__sub">{item.totalChords} chords · {item.key} · {item.bpm} bpm</div>
+                    <div key={item.id} className="lib-row" style={{flexDirection:'column',alignItems:'stretch',gap:'.45rem',padding:'.9rem'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'.7rem'}}>
+                        <div style={{width:40,height:40,borderRadius:12,flexShrink:0,background:'linear-gradient(135deg,var(--bg-3),var(--bg-4))',border:'1.5px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem'}}>🎸</div>
+                        <div className="lib-row__info">
+                          <div className="lib-row__title">{item.title}</div>
+                          <div className="lib-row__sub">{item.totalChords} chords · {item.key} · {item.bpm} bpm{item.duration?` · ${fmtDurEngine(item.duration)}`:''}</div>
+                        </div>
+                        <div className="lib-row__meta">
+                          <span style={{fontSize:'.67rem',color:'var(--text-3)'}}>{fmtDate(item.createdAt)}</span>
+                          <Link to="/extract" className="btn btn--ghost btn--sm" style={{fontSize:'.7rem',padding:'.2rem .5rem'}}>Re-extract</Link>
+                          <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>rm('extractions',item.id)}><IconTrash/></button>
+                        </div>
                       </div>
-                      <div className="lib-row__meta">
-                        <span style={{ fontSize:'.67rem',color:'var(--text-3)' }}>{fmtDate(item.createdAt)}</span>
-                        <Link to="/extract" className="btn btn--ghost btn--sm">Re-extract</Link>
-                        <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>rm('extractions',item.id)}><IconTrash/></button>
-                      </div>
+                      {item.progressions?.length>0&&(
+                        <div style={{paddingLeft:52}}>
+                          <div style={{fontSize:'.67rem',color:'var(--text-3)',marginBottom:'.25rem'}}>Suggested:</div>
+                          <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
+                            {item.progressions.slice(0,2).map((p,i)=><div key={i} style={{fontSize:'.68rem',fontFamily:"'Space Mono',monospace",color:i===0?'var(--accent)':'var(--text-2)',background:i===0?'rgba(255,107,71,.07)':'var(--bg-3)',padding:'.18rem .5rem',borderRadius:6,border:`1px solid ${i===0?'rgba(255,107,71,.22)':'var(--border)'}`}}>{p}</div>)}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}</ColList>
                 :<LibEmpty icon="🎸" text="No extractions yet" cta="Extract chords" to="/extract"/>
@@ -976,21 +1020,31 @@ export default function Library() {
             {/* GENERATED */}
             {activeSection==='generated'&&(
               filterI(generations).length>0
-                ?<ColList>{filterI(generations).map(item=>(
-                    <div key={item.id} className="lib-row">
-                      <div className="lib-row__cover" style={{ background:'var(--bg-3)' }}>🤖</div>
-                      <div className="lib-row__info">
-                        <div className="lib-row__title">{item.title}</div>
-                        <div className="lib-row__sub">{item.style} · {item.key} · {item.bpm} bpm</div>
+                ?<ColList>{filterI(generations).map(item=>{
+                    const isAct=genPlayer.id===item.id, hasP=!!item.progressions?.length
+                    const chords=item.progressions?.[0]?.split(' — ').filter(Boolean)||[]
+                    return(
+                    <div key={item.id} className="lib-row" style={{flexDirection:'column',alignItems:'stretch',gap:'.55rem',padding:'1rem',background:isAct?'rgba(255,107,71,.05)':undefined,borderColor:isAct?'var(--accent)':undefined}}>
+                      <div style={{display:'flex',alignItems:'center',gap:'.7rem'}}>
+                        <button onClick={()=>hasP&&genPlayer.toggle(item)}
+                          style={{width:40,height:40,borderRadius:12,flexShrink:0,background:isAct?'linear-gradient(135deg,var(--accent),var(--accent-2))':'var(--bg-3)',border:`1.5px solid ${isAct?'var(--accent)':'var(--border)'}`,cursor:hasP?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',color:isAct?'#fff':'var(--text-2)',transition:'all .2s'}}>
+                          {isAct&&genPlayer.playing?<svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>:<svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>}
+                        </button>
+                        <div className="lib-row__info">
+                          <div className="lib-row__title">{item.title}</div>
+                          <div className="lib-row__sub">{item.style} · {item.key} · {item.bpm} bpm{item.mood?` · ${item.mood}`:''}</div>
+                        </div>
+                        <div className="lib-row__meta">
+                          <span className={`badge ${sc[item.status]||'badge--blue'}`}>{item.status}</span>
+                          <span style={{fontSize:'.67rem',color:'var(--text-3)'}}>{fmtDate(item.createdAt)}</span>
+                          <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>rm('generations',item.id)}><IconTrash/></button>
+                        </div>
                       </div>
-                      <div className="lib-row__meta">
-                        <span className={`badge ${sc[item.status]||'badge--blue'}`}>{item.status}</span>
-                        <span style={{ fontSize:'.67rem',color:'var(--text-3)' }}>{fmtDate(item.createdAt)}</span>
-                        <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>rm('generations',item.id)}><IconTrash/></button>
-                      </div>
+                      {chords.length>0&&<div style={{display:'flex',gap:'.22rem',flexWrap:'wrap',paddingLeft:52}}>{chords.map((c,ci)=><div key={ci} style={{padding:'.1rem .38rem',borderRadius:5,fontSize:'.63rem',fontWeight:800,fontFamily:"'Space Mono',monospace",background:isAct&&genPlayer.playing&&genPlayer.curChord===ci?'var(--accent)':'var(--bg-3)',color:isAct&&genPlayer.playing&&genPlayer.curChord===ci?'#fff':'var(--text-2)',transition:'all .15s',border:'1px solid var(--border)'}}>{c}</div>)}</div>}
+                      {isAct&&(genPlayer.playing||genPlayer.paused)&&<div style={{height:2,background:'var(--bg-3)',borderRadius:1,overflow:'hidden',marginLeft:52}}><div style={{height:'100%',width:`${genPlayer.progress*100}%`,background:'linear-gradient(90deg,var(--accent),var(--accent-2))',transition:'width .1s linear'}}/></div>}
                     </div>
-                  ))}</ColList>
-                :<LibEmpty icon="🤖" text="No generated tracks" cta="Generate music" to="/generate"/>
+                  )})}</ColList>
+                :<LibEmpty icon="🤖" text="No generated tracks yet" cta="Generate music" to="/generate"/>
             )}
 
             {/* HISTORY */}
