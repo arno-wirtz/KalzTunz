@@ -800,29 +800,186 @@ div:hover > .history-del-btn, div:hover .history-del-btn { opacity:1!important; 
   box-shadow: 0 4px 18px rgba(192,57,43,.28);
 }
 
-/* Search/Discover page — deep indigo cosmos + electric blue */
+/* ── Search / Discover page — deep space dark blue (both themes) ── */
+
+/* Dark-blue cosmic base applied regardless of theme */
+.page--search {
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%,  rgba(59,130,246,.18) 0%,  transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 80%,  rgba(99,102,241,.16) 0%,  transparent 55%),
+    radial-gradient(ellipse 50% 40% at 55% 45%,  rgba(14,165,233,.10) 0%,  transparent 50%),
+    linear-gradient(175deg, #050d1a 0%, #080e24 35%, #060b1e 65%, #040918 100%);
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Animated star field */
+.page--search::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(1px 1px at  8% 12%, rgba(255,255,255,.85) 0%, transparent 100%),
+    radial-gradient(1px 1px at 22% 38%, rgba(255,255,255,.60) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 41% 7%,  rgba(255,255,255,.90) 0%, transparent 100%),
+    radial-gradient(1px 1px at 58% 28%, rgba(255,255,255,.55) 0%, transparent 100%),
+    radial-gradient(1px 1px at 73% 15%, rgba(255,255,255,.75) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 85% 42%, rgba(255,255,255,.80) 0%, transparent 100%),
+    radial-gradient(1px 1px at 94% 8%,  rgba(255,255,255,.65) 0%, transparent 100%),
+    radial-gradient(1px 1px at 15% 65%, rgba(255,255,255,.50) 0%, transparent 100%),
+    radial-gradient(1px 1px at 35% 82%, rgba(255,255,255,.70) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 62% 71%, rgba(255,255,255,.85) 0%, transparent 100%),
+    radial-gradient(1px 1px at 78% 88%, rgba(255,255,255,.55) 0%, transparent 100%),
+    radial-gradient(1px 1px at 92% 75%, rgba(255,255,255,.65) 0%, transparent 100%),
+    radial-gradient(2px 2px at 48% 52%, rgba(147,197,253,.70) 0%, transparent 100%),
+    radial-gradient(1px 1px at 28% 20%, rgba(196,181,253,.60) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 67% 55%, rgba(125,211,252,.65) 0%, transparent 100%);
+  animation: twinkle 6s ease-in-out infinite alternate;
+}
+@keyframes twinkle {
+  0%   { opacity:.7 }
+  50%  { opacity:1  }
+  100% { opacity:.65 }
+}
+
+.page--search > * { position: relative; z-index: 1; }
+
+/* Cards */
+.page--search .card {
+  background: rgba(8,18,42,.75) !important;
+  border-color: rgba(59,130,246,.22) !important;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 4px 24px rgba(0,0,0,.4), inset 0 1px 0 rgba(59,130,246,.12) !important;
+}
+.page--search .card:hover {
+  border-color: rgba(59,130,246,.45) !important;
+  box-shadow: 0 8px 40px rgba(0,0,0,.5), 0 0 0 1px rgba(59,130,246,.2), inset 0 1px 0 rgba(59,130,246,.15) !important;
+}
+
+/* Text — forced light so it's readable on dark bg */
+.page--search .page-header__title { color: #e0eaff !important; }
+.page--search .page-header__sub   { color: #8ba4d4 !important; }
+.page--search .page-header__badge {
+  background: rgba(59,130,246,.15) !important;
+  border-color: rgba(59,130,246,.35) !important;
+  color: #93c5fd !important;
+}
+.page--search .page-header::before { background: linear-gradient(90deg,#3b82f6,#6366f1) !important; }
+
+/* Ensure all text in search cards is readable */
+.page--search { color: #dbeafe !important; }
+.page--search .muted, .page--search .muted-3,
+.page--search [style*="color: var(--text-2)"],
+.page--search [style*="color:var(--text-2)"]  { color: #93b4d8 !important; }
+
+/* Search bar */
+.page--search .search-bar {
+  background: rgba(8,18,42,.85) !important;
+  border-color: rgba(59,130,246,.35) !important;
+  backdrop-filter: blur(16px);
+}
+.page--search .search-bar:focus-within {
+  border-color: rgba(99,102,241,.7) !important;
+  box-shadow: 0 0 0 4px rgba(99,102,241,.15) !important;
+}
+.page--search .search-bar input { color: #e0eaff !important; }
+.page--search .search-bar input::placeholder { color: #4b6a9e !important; }
+.page--search .search-bar svg { color: #4b6a9e !important; }
+
+/* Form inputs inside search */
+.page--search .form-input,
+.page--search .form-select {
+  background: rgba(8,18,42,.8) !important;
+  border-color: rgba(59,130,246,.25) !important;
+  color: #dbeafe !important;
+}
+
+/* Primary button — electric blue */
+.page--search .btn--primary {
+  background: linear-gradient(135deg,#2563eb,#4f46e5) !important;
+  box-shadow: 0 4px 18px rgba(37,99,235,.4), 0 0 0 1px rgba(99,102,241,.3) !important;
+}
+.page--search .btn--primary:hover {
+  filter: brightness(1.12) !important;
+  box-shadow: 0 6px 28px rgba(37,99,235,.55), 0 0 20px rgba(99,102,241,.3) !important;
+}
+.page--search .btn--secondary,
+.page--search .btn--ghost {
+  background: rgba(8,18,42,.7) !important;
+  border-color: rgba(59,130,246,.28) !important;
+  color: #93c5fd !important;
+}
+.page--search .btn--secondary:hover,
+.page--search .btn--ghost:hover {
+  background: rgba(37,99,235,.18) !important;
+  border-color: rgba(99,102,241,.5) !important;
+  color: #bfdbfe !important;
+}
+
+/* Artist / track cards */
+.page--search .track-card,
+.page--search .artist-card {
+  background: rgba(8,18,42,.75) !important;
+  border-color: rgba(59,130,246,.18) !important;
+}
+.page--search .track-card:hover,
+.page--search .artist-card:hover {
+  border-color: rgba(99,102,241,.45) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.45), 0 0 12px rgba(99,102,241,.2) !important;
+}
+
+/* Genre cards */
+.page--search button[style*="border-radius: 12px"] {
+  backdrop-filter: blur(12px);
+}
+
+/* Mood chips */
+.page--search .mood-chip {
+  border-color: rgba(59,130,246,.3) !important;
+  background: rgba(37,99,235,.1) !important;
+  color: #93c5fd !important;
+}
+.page--search .mood-chip:hover {
+  background: rgba(37,99,235,.22) !important;
+  border-color: rgba(99,102,241,.5) !important;
+}
+.page--search .mood-chip.active {
+  background: linear-gradient(135deg,#2563eb,#4f46e5) !important;
+  border-color: #4f46e5 !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px rgba(37,99,235,.35) !important;
+}
+
+/* Badge overrides */
+.page--search .badge { border-color: rgba(59,130,246,.25) !important; }
+.page--search .badge--blue { background: rgba(37,99,235,.18) !important; color: #93c5fd !important; }
+.page--search .badge--coral { background: rgba(255,107,71,.15) !important; color: #fca5a5 !important; }
+
+/* Artist modal dark-blue override */
+.page--search + * .artist-modal,
+.artist-modal {
+  background: #070f1f !important;
+  border-color: rgba(59,130,246,.25) !important;
+}
+
+/* Now playing bar inherits dark-blue when in search */
+.page--search ~ .now-playing-bar {
+  background: rgba(5,12,30,.92) !important;
+  border-top-color: rgba(59,130,246,.25) !important;
+}
+
+/* Scrollbar in search context */
+.page--search ::-webkit-scrollbar-track { background: rgba(8,18,42,.5); }
+.page--search ::-webkit-scrollbar-thumb { background: rgba(59,130,246,.4); }
+
+/* Light mode override — force dark-blue theme regardless of OS theme */
 [data-theme="light"] .page--search {
-  --page-accent: #1a0a5c;
-  --page-tint:   rgba(26,10,92,.06);
-  background: linear-gradient(160deg,#f2f0ff 0%,#eeeaff 40%,#f0f4ff 100%);
-}
-[data-theme="light"] .page--search .card {
-  background: rgba(255,255,255,.86);
-  border-color: rgba(26,10,92,.11);
-}
-[data-theme="light"] .page--search .page-header__badge {
-  background: rgba(26,10,92,.09);
-  border-color: rgba(26,10,92,.2);
-  color: #2d1a8a;
-}
-[data-theme="light"] .page--search .page-header__title { color: #1a0a5c; }
-[data-theme="light"] .page--search .search-bar {
-  background: rgba(255,255,255,.9);
-  border-color: rgba(26,10,92,.2);
-}
-[data-theme="light"] .page--search .btn--primary {
-  background: linear-gradient(135deg,#3a1fc0,#5a3fdf);
-  box-shadow: 0 4px 18px rgba(58,31,192,.28);
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(59,130,246,.22) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(99,102,241,.20) 0%, transparent 55%),
+    linear-gradient(175deg, #050d1a 0%, #080e24 35%, #060b1e 65%, #040918 100%) !important;
 }
 
 /* Library page — warm vintage parchment gold */

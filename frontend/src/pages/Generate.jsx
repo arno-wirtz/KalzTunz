@@ -473,7 +473,7 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
       doc.setFillColor(...(isFiltered ? CORAL : [245,242,238]))
       doc.roundedRect(M, y, INNER, 7, 1.5, 1.5, 'F')
       doc.setFont('helvetica','bold'); doc.setFontSize(8)
-      doc.setTextColor(isFiltered ? 255 : ...DARK, isFiltered ? 255 : undefined, isFiltered ? 255 : undefined)
+      doc.setTextColor(...(isFiltered ? [255,255,255] : DARK))
       doc.text(label.toUpperCase(), M+3, y+4.5)
       if (isFiltered) {
         doc.setFont('helvetica','normal'); doc.setFontSize(6.5)
