@@ -713,8 +713,7 @@ function ShareModal({result,onClose}) {
   const text=`🎵 KalzTunz — ${result.genre||'Chord'} Sheet
 Key: ${result.key} ${result.mode} · Mood: ${result.mood} · BPM: ${result.bpm}
 
-${result.progressions.slice(0,3).map((p,i)=>`${i+1}. ${p}`).join('
-')}
+${result.progressions.slice(0,3).map((p,i)=>`${i+1}. ${p}`).join('\n')}
 
 Generate free at kalztunz.com`
   const copy=()=>navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2200)}).catch(()=>{})
