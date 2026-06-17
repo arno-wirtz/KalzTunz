@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../App'
 import { ChordSynth, buildLocal, buildScaleRef, fmtDur, KEY_FREQS, chordFreqs, saveGenerationToLib } from '../utils/musicEngine'
+import { safeJson } from '../App'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -889,7 +890,7 @@ export default function Generate() {
       fd.append('instruments', JSON.stringify(hasVocals?[...instruments,`voice:${voiceType}`]:instruments))
       fd.append('num_variations', String(numVariations))
       const res = await fetch(`${API}/api/generate`,{method:'POST',body:fd})
-      const data = await res.json()
+      const data = await safeJson(res)
       if (!res.ok) throw new Error(data.detail||'Generation failed')
       setJobStatus(data.status)
       if (data.mode==='sync'&&data.result) { setLoading(false); applyResult(data.result); return }
