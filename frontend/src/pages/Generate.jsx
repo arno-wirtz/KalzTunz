@@ -829,8 +829,7 @@ export default function Generate() {
   const [showShare,  setShowShare] = useState(false)
   const [saveMsg,    setSaveMsg]   = useState(null)
   const player = useChordPlayer()
-  const [pdfInstr,   setPdfInstr]  = useState('all')
-  const [view,       setView]     = useState('progressions')
+
 
   const pollRef = useRef(null)
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
