@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth, safeJson, demoRegister } from '../App'
+import { useAuth } from '../App'
 import { AuthLogoPanel } from './Login'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'

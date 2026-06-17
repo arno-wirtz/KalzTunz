@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth, safeJson, demoLogin } from '../App'
+import { useAuth } from '../App'
 import logoImg from '../assets/kalztunz-logo.png'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'

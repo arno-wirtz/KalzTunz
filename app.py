@@ -181,12 +181,7 @@ async def request_timing_middleware(request: Request, call_next):
 # ==================== STATIC FILES ====================
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
-# Serve built React assets — Vite outputs to dist/assets/
 if FRONTEND_DIST.is_dir():
-    assets_dir = FRONTEND_DIST / "assets"
-    if assets_dir.is_dir():
-        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
-    # Also serve any other static files at root level (favicon, manifest, etc.)
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIST)), name="static")
 
 # ==================== ROUTERS ====================

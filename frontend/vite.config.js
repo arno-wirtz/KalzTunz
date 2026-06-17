@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// In production (Render), VITE_API_URL is '' so all /api calls hit same origin
+// In development, proxy forwards /api to the local FastAPI server
 export default defineConfig({
   plugins: [react()],
   publicDir: 'public',
@@ -15,20 +17,13 @@ export default defineConfig({
   },
 
   build: {
+    // Build directly into the project root dist/ so FastAPI can serve it
     outDir: '../dist',
     emptyOutDir: true,
     sourcemap: false,
     rollupOptions: {
       output: {
-        // vite 8 requires manualChunks as a Function, not Object
-        manualChunks(id) {
-          if (id.includes('node_modules/react') ||
-              id.includes('node_modules/react-dom') ||
-              id.includes('node_modules/react-router-dom') ||
-              id.includes('node_modules/scheduler')) {
-            return 'vendor'
-          }
-        },
+        manualChunks: { vendor: ['react','react-dom','react-router-dom'] },
       },
     },
   },

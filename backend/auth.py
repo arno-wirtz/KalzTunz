@@ -348,33 +348,6 @@ async def upload_avatar(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-@router.post("/change-password", summary="Change current user password")
-async def change_password(
-    request: Request,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    try:
-        body = await request.json()
-        current_password = body.get("current_password", "")
-        new_password     = body.get("new_password", "")
-        if not current_password or not new_password:
-            raise HTTPException(status_code=422, detail="Both current and new password are required")
-        if len(new_password) < 8:
-            raise HTTPException(status_code=422, detail="New password must be at least 8 characters")
-        # Verify current password
-        from backend.security_utils import verify_password, hash_password
-        if not verify_password(current_password, current_user.hashed_password):
-            raise HTTPException(status_code=400, detail="Current password is incorrect")
-        current_user.hashed_password = hash_password(new_password)
-        db.commit()
-        return {"ok": True, "message": "Password updated successfully"}
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
-
 # ==================== GOOGLE OAUTH ====================
 
 @router.get("/google", summary="Redirect to Google OAuth consent screen")
