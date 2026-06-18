@@ -1,18 +1,10 @@
-# KalzTunz — Single unified Render deployment
-# One web service: builds React then serves it from FastAPI (no CORS, no split domains)
-
 services:
-
-  # ── Main web service (FastAPI + built React frontend) ─────────────
   - type: web
     name: kalztunz
     runtime: python
     region: oregon
     plan: free
-    buildCommand: |
-      pip install --upgrade pip
-      pip install --only-binary=scipy -r requirements.txt
-      cd frontend && npm ci && npm run build && cd ..
+    buildCommand: pip install --upgrade pip && pip install --only-binary=scipy -r requirements.txt && cd frontend && npm ci && npm run build && cd ..
     startCommand: gunicorn -w 2 -k uvicorn.workers.UvicornWorker app:app --bind 0.0.0.0:$PORT --timeout 120
     healthCheckPath: /health
     envVars:
@@ -50,15 +42,12 @@ services:
       - key: GITHUB_CLIENT_SECRET
         sync: false
 
-  # ── RQ background worker ───────────────────────────────────────────
   - type: worker
     name: kalztunz-worker
     runtime: python
     region: oregon
     plan: free
-    buildCommand: |
-      pip install --upgrade pip
-      pip install --only-binary=scipy -r requirements.txt
+    buildCommand: pip install --upgrade pip && pip install --only-binary=scipy -r requirements.txt
     startCommand: python worker.py
     envVars:
       - key: DATABASE_URL

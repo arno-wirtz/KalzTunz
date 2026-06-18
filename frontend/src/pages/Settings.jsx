@@ -209,6 +209,68 @@ function AvatarModal({ currentSrc, onSave, onClose }) {
 }
 
 /* ── Account Panel ──────────────────────────────────── */
+/* ── Password Change Section ──────────────────────────────── */
+function PasswordChangeSection() {
+  const [cur,     setCur]     = useState('')
+  const [newPwd,  setNewPwd]  = useState('')
+  const [confirm, setConfirm2] = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [msg,     setMsg]     = useState(null)
+
+  const valid = cur.length > 0 && newPwd.length >= 8 && newPwd === confirm
+
+  const handleChange = async () => {
+    if (!valid) return
+    setSaving(true); setMsg(null)
+    try {
+      const token = localStorage.getItem('kalztunz_token')
+      if (!token) throw new Error('Not logged in')
+      const res = await fetch(`${API}/api/auth/change-password`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_password: cur, new_password: newPwd }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.detail || 'Password change failed')
+      }
+      setMsg({ type: 'success', text: 'Password updated successfully ✓' })
+      setCur(''); setNewPwd(''); setConfirm2('')
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message || 'Failed. Please try again.' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Section title="Change Password">
+      <div className="form">
+        <div className="form-group">
+          <label className="form-label">Current Password</label>
+          <input className="form-input" type="password" value={cur} onChange={e=>setCur(e.target.value)} placeholder="Enter current password" autoComplete="current-password"/>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">New Password</label>
+            <input className="form-input" type="password" value={newPwd} onChange={e=>setNewPwd(e.target.value)} placeholder="Min 8 characters" autoComplete="new-password"/>
+            {newPwd.length > 0 && newPwd.length < 8 && <span className="form-error">At least 8 characters required</span>}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Confirm New</label>
+            <input className="form-input" type="password" value={confirm} onChange={e=>setConfirm2(e.target.value)} placeholder="Repeat new password" autoComplete="new-password"/>
+            {confirm.length > 0 && confirm !== newPwd && <span className="form-error">Passwords do not match</span>}
+          </div>
+        </div>
+        {msg && <div className={`alert alert--${msg.type==='success'?'success':'error'}`} style={{fontSize:'.82rem'}}>{msg.text}</div>}
+        <div>
+          <button className="btn btn--secondary btn--sm" onClick={handleChange} disabled={saving||!valid}>
+            {saving ? <><span className="spinner" style={{width:11,height:11,borderWidth:2}}/> Updating…</> : 'Update Password'}
+          </button>
+        </div>
+      </div>
+    </Section>
+  )
+}
+
 function AccountPanel() {
   const { user, updateUser } = useAuth()
   const { startTour } = useTutorial()
@@ -226,7 +288,6 @@ function AccountPanel() {
   const handleSave = async () => {
     setSaving(true); setMsg(null)
     try {
-      // Simulate API call — in production: PATCH /api/auth/profile
       const token = localStorage.getItem('kalztunz_token')
       if (token) {
         const res = await fetch(`${API}/api/auth/profile`, {
@@ -239,8 +300,8 @@ function AccountPanel() {
         updateUser(updated)
       } else { updateUser({ username, bio, location, website }) }
       setMsg({ type:'success', text:'Profile updated successfully ✓' })
-    } catch {
-      setMsg({ type:'error', text:'Failed to save. Please try again.' })
+    } catch (e) {
+      setMsg({ type:'error', text: e?.message || 'Failed to save. Please try again.' })
     } finally {
       setSaving(false)
     }
@@ -353,25 +414,7 @@ function AccountPanel() {
         ))}
       </Section>
 
-      <Section title="Change Password">
-        <div className="form">
-          <div className="form-group">
-            <label className="form-label">Current Password</label>
-            <input className="form-input" type="password" placeholder="••••••••" />
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">New Password</label>
-              <input className="form-input" type="password" placeholder="Min 8 characters" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Confirm New</label>
-              <input className="form-input" type="password" placeholder="Repeat password" />
-            </div>
-          </div>
-          <div><button className="btn btn--secondary btn--sm">Update Password</button></div>
-        </div>
-      </Section>
+      <PasswordChangeSection/>
 
       {showAvatar && (
         <AvatarModal currentSrc={user?.profile_pic} onSave={handleAvatarSave} onClose={() => setShowAvatar(false)} />

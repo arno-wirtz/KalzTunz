@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../App'
 import { ChordSynth, buildLocal, buildScaleRef, fmtDur, KEY_FREQS, chordFreqs, saveGenerationToLib } from '../utils/musicEngine'
+import { safeJson } from '../App'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -473,7 +474,7 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
       doc.setFillColor(...(isFiltered ? CORAL : [245,242,238]))
       doc.roundedRect(M, y, INNER, 7, 1.5, 1.5, 'F')
       doc.setFont('helvetica','bold'); doc.setFontSize(8)
-      doc.setTextColor(isFiltered ? 255 : ...DARK, isFiltered ? 255 : undefined, isFiltered ? 255 : undefined)
+      doc.setTextColor(...(isFiltered ? [255,255,255] : DARK))
       doc.text(label.toUpperCase(), M+3, y+4.5)
       if (isFiltered) {
         doc.setFont('helvetica','normal'); doc.setFontSize(6.5)
@@ -713,8 +714,7 @@ function ShareModal({result,onClose}) {
   const text=`🎵 KalzTunz — ${result.genre||'Chord'} Sheet
 Key: ${result.key} ${result.mode} · Mood: ${result.mood} · BPM: ${result.bpm}
 
-${result.progressions.slice(0,3).map((p,i)=>`${i+1}. ${p}`).join('
-')}
+${result.progressions.slice(0,3).map((p,i)=>`${i+1}. ${p}`).join('\n')}
 
 Generate free at kalztunz.com`
   const copy=()=>navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2200)}).catch(()=>{})
@@ -830,8 +830,7 @@ export default function Generate() {
   const [showShare,  setShowShare] = useState(false)
   const [saveMsg,    setSaveMsg]   = useState(null)
   const player = useChordPlayer()
-  const [pdfInstr,   setPdfInstr]  = useState('all')
-  const [view,       setView]     = useState('progressions')
+
 
   const pollRef = useRef(null)
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
@@ -891,7 +890,7 @@ export default function Generate() {
       fd.append('instruments', JSON.stringify(hasVocals?[...instruments,`voice:${voiceType}`]:instruments))
       fd.append('num_variations', String(numVariations))
       const res = await fetch(`${API}/api/generate`,{method:'POST',body:fd})
-      const data = await res.json()
+      const data = await safeJson(res)
       if (!res.ok) throw new Error(data.detail||'Generation failed')
       setJobStatus(data.status)
       if (data.mode==='sync'&&data.result) { setLoading(false); applyResult(data.result); return }

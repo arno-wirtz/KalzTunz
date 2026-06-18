@@ -856,3 +856,64 @@ export default function Search() {
       </div>
 
 
+      {/* ── Filter row ── */}
+      <div style={{ display:'flex',alignItems:'center',gap:'.6rem',flexWrap:'wrap',marginBottom:'1.25rem' }}>
+        <div style={{ display:'flex',background:'var(--bg-2)',border:'1px solid var(--border)',borderRadius:12,padding:3,gap:2 }}>
+          {[['tracks',`🎵 Tracks`,tracks.length],['artists',`👤 Artists`,artists.length],['albums',`💿 Albums`,albums.length]].map(([k,l,n])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{
+              display:'flex',alignItems:'center',gap:'.4rem',
+              padding:'.32rem .85rem',borderRadius:9,border:'none',cursor:'pointer',
+              fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',transition:'all .2s',
+              background:tab===k?'var(--accent)':'transparent',
+              color:tab===k?'#fff':'var(--text-2)',
+            }}>
+              {l}
+              {n > 0 && <span style={{ background:tab===k?'rgba(255,255,255,.2)':'var(--bg-3)',borderRadius:999,padding:'0 .38rem',fontSize:'.65rem',fontWeight:800 }}>{n}</span>}
+            </button>
+          ))}
+        </div>
+        {(query || activeMood) && (
+          <button onClick={clearSearch} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.28rem .7rem',cursor:'pointer',fontSize:'.75rem',color:'var(--text-3)',fontFamily:'inherit',transition:'all .18s' }}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.color='var(--text-3)'}}>
+            ✕ Clear
+          </button>
+        )}
+      </div>
+
+      {/* Error */}
+      {spotify.error && <div className="alert alert--error" style={{ marginBottom:'1rem' }}>⚠ {spotify.error}</div>}
+
+      {/* Results header */}
+      <div className="search-results-header" style={{ marginBottom:'1rem' }}>
+        <h2 style={{ fontSize:'1rem',fontWeight:700 }}>
+          {mood ? `${mood.emoji} ${mood.label} Vibes` : query ? `Results for "${query}"` : 'Trending Now'}
+        </h2>
+        {loading && <span className="spinner" style={{ width:14,height:14,borderWidth:2 }}/>}
+        {!loading && <span className="search-results-count">{tab==='tracks'?`${tracks.length} tracks`:tab==='artists'?`${artists.length} artists`:`${albums.length} albums`}</span>}
+      </div>
+
+      {/* Results */}
+      {tab==='tracks' && (loading ? <div className="card-grid">{Array(8).fill(0).map((_,i)=><SkeletonCard key={i}/>)}</div>
+        : tracks.length>0
+          ? <div className="card-grid fade-up">{tracks.map((t,i)=><div key={t.id} className="fade-up" style={{ animationDelay:`${Math.min(i,6)*.04}s` }}><TrackCard track={t} onPlay={setNowPlaying} onLike={toggleLike} liked={liked.has(t.id)} onSave={toggleSave} saved={saved.has(t.id)} onArtistClick={openArtist}/></div>)}</div>
+          : <div className="lib-empty fade-up"><div className="lib-empty__icon">{mood?mood.emoji:'🎵'}</div><p className="lib-empty__text">{query?`No tracks for "${query}"`:'Search for tracks above'}</p></div>
+      )}
+
+      {tab==='artists' && (loading ? <div style={{ display:'flex',flexDirection:'column',gap:'.5rem' }}>{Array(5).fill(0).map((_,i)=><SkeletonRow key={i}/>)}</div>
+        : artists.length>0
+          ? <div style={{ display:'flex',flexDirection:'column',gap:'.5rem' }} className="fade-up">{artists.map((a,i)=><div key={a.id} className="fade-up" style={{ animationDelay:`${i*.05}s` }}><ArtistCard artist={a} onClick={()=>openArtist(a.id,a.name)}/></div>)}</div>
+          : <div className="lib-empty fade-up"><div className="lib-empty__icon">👤</div><p className="lib-empty__text">{query?`No artists for "${query}"`:'Search for artists above'}</p></div>
+      )}
+
+      {tab==='albums' && (loading ? <div className="card-grid">{Array(6).fill(0).map((_,i)=><SkeletonCard key={i}/>)}</div>
+        : albums.length>0
+          ? <div className="card-grid fade-up">{albums.map((a,i)=><div key={a.id} className="fade-up" style={{ animationDelay:`${Math.min(i,6)*.04}s` }}><AlbumCard album={a} onClick={()=>a.artist_id&&openArtist(a.artist_id,a.artist)}/></div>)}</div>
+          : <div className="lib-empty fade-up"><div className="lib-empty__icon">💿</div><p className="lib-empty__text">{query?`No albums for "${query}"`:'Search for albums above'}</p></div>
+      )}
+
+      {artistModal && <ArtistModal artistId={artistModal.id} onClose={()=>setArtistModal(null)} onPlay={t=>{setNowPlaying(t);setArtistModal(null)}} liked={liked} onLike={toggleLike}/>}
+      {nowPlaying  && <NowPlayingBar track={nowPlaying} onClose={()=>setNowPlaying(null)}/>}
+    </div>
+  )
+}

@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useAuth } from '../App'
 import { ChordSynth, fmtDur, saveExtractionToLib } from '../utils/musicEngine'
+import { safeJson } from '../App'
 
 const API      = import.meta.env.VITE_API_URL || ''
 const POLL_MS  = 2000
@@ -236,6 +237,33 @@ function ShareModal({ result, file, onClose }) {
 /* ══════════════════════════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════════ */
+
+/* ── Demo extraction (no backend needed) ─────────────────────── */
+function buildDemoResult(file, minConf = 0.6) {
+  const dur  = 180
+  const bpm  = 120
+  const keys = ['C major','G major','D major','A minor','E minor','F major']
+  const key  = keys[Math.floor(Math.random() * keys.length)]
+  const CHORDS = ['C','Am','F','G','Dm','Em','Bb','A','D','E']
+  const numChords = Math.floor(16 + Math.random() * 32)
+  const chords = Array.from({ length: numChords }, (_, i) => ({
+    name:       CHORDS[i % CHORDS.length] + (Math.random()>.6?'m':''),
+    time:       parseFloat((i * (dur / numChords)).toFixed(2)),
+    end_time:   parseFloat(((i+1) * (dur / numChords)).toFixed(2)),
+    confidence: parseFloat((minConf + Math.random() * (1 - minConf)).toFixed(3)),
+  }))
+  const progs = [
+    chords.slice(0, 4).map(c=>c.name).join(' — '),
+    chords.slice(4, 8).map(c=>c.name).join(' — '),
+  ]
+  return {
+    metadata:               { key, bpm, duration: dur, filename: file?.name },
+    chords,
+    suggested_progressions: progs,
+    _demo:                  true,
+  }
+}
+
 export default function Extraction() {
   const { user, getToken } = useAuth()
   const [file,       setFile]       = useState(null)
@@ -273,7 +301,7 @@ export default function Extraction() {
       try{
         const headers={}, token=getToken?.()
         if(token)headers['Authorization']=`Bearer ${token}`
-        const res=await fetch(`${API}/api/jobs/${id}`,{headers}), data=await res.json()
+        const res=await fetch(`${API}/api/jobs/${id}`,{headers}), data=await safeJson(res)
         setJobStatus(data.status)
         if(data.status==='finished'){
           clearInterval(pollRef.current); setResult(data.result); setAvailInstr(detectInstr(null))
@@ -293,15 +321,31 @@ export default function Extraction() {
       fd.append('track_filter',instrument==='all'?'all':instrument);fd.append('user_id',user?.id||'anonymous')
       const headers={}, token=getToken?.()
       if(token)headers['Authorization']=`Bearer ${token}`
-      const res=await fetch(`${API}/api/extract-chords`,{method:'POST',headers,body:fd}), data=await res.json()
-      if(!res.ok)throw new Error(data.detail||'Upload failed')
-      setJobId(data.job_id)
-      if(data.mode==='sync'&&data.result){
-        setJobStatus('finished');setResult(data.result);filePlayer.stop()
-        const progs=data.result?.suggested_progressions
-        if(progs?.length)chordPlayer.load(progs[0],data.result?.metadata?.bpm)
-      } else{setJobStatus('queued');startPolling(data.job_id)}
-    }catch(e){setError(e.message)}finally{setUploading(false)}
+      let submitted = false
+      try {
+        const res=await fetch(`${API}/api/extract-chords`,{method:'POST',headers,body:fd})
+        const data=await safeJson(res)
+        if(!res.ok) throw new Error(data.detail||`Server error ${res.status}`)
+        setJobId(data.job_id)
+        if(data.mode==='sync'&&data.result){
+          setJobStatus('finished');setResult(data.result);filePlayer.stop()
+          const progs=data.result?.suggested_progressions
+          if(progs?.length)chordPlayer.load(progs[0],data.result?.metadata?.bpm)
+        } else { setJobStatus('queued');startPolling(data.job_id) }
+        submitted = true
+      } catch(netErr) {
+        // Backend unavailable — run local demo extraction
+        if (!submitted) {
+          const demoResult = buildDemoResult(file, minConf)
+          setJobStatus('finished'); setResult(demoResult)
+          const progs = demoResult.suggested_progressions
+          if(progs?.length) chordPlayer.load(progs[0], demoResult.metadata?.bpm)
+          setJobId('demo-local')
+          setError(null) // clear any previous error
+          return
+        }
+        setError(netErr.message)
+      } finally{setUploading(false)}
   }
 
   const filteredChords=(result?.chords||[]).filter(c=>{
@@ -460,6 +504,12 @@ export default function Extraction() {
                 </div>
               </div>
 
+              {result?._demo && (
+                <div className="alert" style={{ background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',color:'#fbbf24',marginBottom:'.75rem',fontSize:'.82rem' }}>
+                  ⚡ Demo mode — backend unavailable. Showing sample extraction for <strong>{result.metadata?.filename||'your file'}</strong>.
+                  The audio player still works — connect a backend for real chord extraction.
+                </div>
+              )}
               {saveMsg&&<div className="alert alert--success" style={{ fontSize:'.78rem',padding:'.38rem .75rem' }}>{saveMsg}</div>}
 
               <div className="card" style={{ padding:view==='sheet'?'1.25rem':'.9rem',overflowX:'auto' }}>

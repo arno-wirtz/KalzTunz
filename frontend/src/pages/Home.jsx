@@ -62,7 +62,7 @@ export default function Home() {
   const f = FEATURES[activeF]
 
   return (
-    <div>
+    <div className="page--home">
 
       {/* ────────────────── HERO ────────────────── */}
       <div className="hero">
