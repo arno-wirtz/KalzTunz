@@ -1297,3 +1297,110 @@ div:hover > .history-del-btn, div:hover .history-del-btn { opacity:1!important; 
 [data-theme="light"] .page--extract > *,
 [data-theme="light"] .page--generate > *,
 [data-theme="light"] .page--search > * { position: relative; z-index: 1; }
+
+/* ════════════════════════════════════════════════════════════
+   LIBRARY PAGE — animation system
+════════════════════════════════════════════════════════════ */
+@keyframes libFadeUp {
+  from { opacity:0; transform:translateY(14px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes libPopIn {
+  0%   { opacity:0; transform:scale(.85); }
+  60%  { opacity:1; transform:scale(1.04); }
+  100% { opacity:1; transform:scale(1); }
+}
+@keyframes libShimmer {
+  0%   { background-position:-200% 0; }
+  100% { background-position:200% 0; }
+}
+@keyframes libGlowPulse {
+  0%,100% { box-shadow:0 0 0 0 rgba(139,92,246,.0); }
+  50%     { box-shadow:0 0 24px 4px rgba(139,92,246,.18); }
+}
+@keyframes libFloatIcon {
+  0%,100% { transform:translateY(0) rotate(0deg); }
+  50%     { transform:translateY(-4px) rotate(3deg); }
+}
+@keyframes libSlideInLeft {
+  from { opacity:0; transform:translateX(-16px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+@keyframes libBarGrow {
+  from { width:0; }
+}
+
+.page--library .stat-card-anim {
+  animation: libPopIn .45s cubic-bezier(.34,1.56,.64,1) backwards;
+}
+.page--library .stat-card-anim:nth-child(1){animation-delay:.02s}
+.page--library .stat-card-anim:nth-child(2){animation-delay:.07s}
+.page--library .stat-card-anim:nth-child(3){animation-delay:.12s}
+.page--library .stat-card-anim:nth-child(4){animation-delay:.17s}
+.page--library .stat-card-anim:nth-child(5){animation-delay:.22s}
+.page--library .stat-card-anim:nth-child(6){animation-delay:.27s}
+
+.page--library .lib-row-anim {
+  animation: libFadeUp .38s ease backwards;
+}
+.page--library .lib-row-anim:nth-child(1){animation-delay:.01s}
+.page--library .lib-row-anim:nth-child(2){animation-delay:.04s}
+.page--library .lib-row-anim:nth-child(3){animation-delay:.07s}
+.page--library .lib-row-anim:nth-child(4){animation-delay:.10s}
+.page--library .lib-row-anim:nth-child(5){animation-delay:.13s}
+.page--library .lib-row-anim:nth-child(6){animation-delay:.16s}
+.page--library .lib-row-anim:nth-child(7){animation-delay:.19s}
+.page--library .lib-row-anim:nth-child(8){animation-delay:.22s}
+.page--library .lib-row-anim:nth-child(n+9){animation-delay:.24s}
+
+.page--library .nav-item-anim {
+  animation: libSlideInLeft .3s ease backwards;
+}
+.page--library .nav-item-anim:nth-child(1){animation-delay:.02s}
+.page--library .nav-item-anim:nth-child(2){animation-delay:.05s}
+.page--library .nav-item-anim:nth-child(3){animation-delay:.08s}
+.page--library .nav-item-anim:nth-child(4){animation-delay:.11s}
+.page--library .nav-item-anim:nth-child(5){animation-delay:.14s}
+.page--library .nav-item-anim:nth-child(6){animation-delay:.17s}
+.page--library .nav-item-anim:nth-child(7){animation-delay:.20s}
+.page--library .nav-item-anim:nth-child(8){animation-delay:.23s}
+
+/* Stat card hover shimmer sweep */
+.page--library .stat-card-anim {
+  position: relative;
+  overflow: hidden;
+}
+.page--library .stat-card-anim::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.08) 45%, transparent 60%);
+  background-size: 200% 100%;
+  background-position: -200% 0;
+  pointer-events: none;
+  transition: background-position .8s;
+}
+.page--library .stat-card-anim:hover::after { background-position: 200% 0; }
+
+/* Animated header icon */
+.page--library .lib-header-icon {
+  display: inline-block;
+  animation: libFloatIcon 3.2s ease-in-out infinite;
+}
+
+/* Sidebar active-tab glow */
+.page--library nav button[style*="rgba(255,107,71,.14)"] {
+  animation: libGlowPulse 2.4s ease-in-out infinite;
+}
+
+/* Section content transition */
+.page--library .section-transition { animation: libFadeUp .35s ease; }
+
+/* Playing row pulse ring */
+.page--library .lib-row[style*="rgba(255,107,71,.06)"] {
+  animation: libGlowPulse 2s ease-in-out infinite;
+}
+
+/* Now playing bar entrance */
+.now-playing-bar { animation: libFadeUp .4s cubic-bezier(.2,.8,.2,1); }
+
+/* Spin keyframe used by NowPlayingBar cover */

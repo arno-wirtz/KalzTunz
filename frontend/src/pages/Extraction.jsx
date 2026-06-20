@@ -314,38 +314,33 @@ export default function Extraction() {
   },[getToken,filePlayer,chordPlayer])
 
   const handleSubmit=async()=>{
-    if(!file)return; setUploading(true);setError(null);setResult(null);setJobId(null);setJobStatus(null)
-    try{
-      const fd=new FormData()
-      fd.append('file',file);fd.append('file_type',fileType);fd.append('min_confidence',String(minConf))
-      fd.append('track_filter',instrument==='all'?'all':instrument);fd.append('user_id',user?.id||'anonymous')
-      const headers={}, token=getToken?.()
-      if(token)headers['Authorization']=`Bearer ${token}`
-      let submitted = false
-      try {
-        const res=await fetch(`${API}/api/extract-chords`,{method:'POST',headers,body:fd})
-        const data=await safeJson(res)
-        if(!res.ok) throw new Error(data.detail||`Server error ${res.status}`)
-        setJobId(data.job_id)
-        if(data.mode==='sync'&&data.result){
-          setJobStatus('finished');setResult(data.result);filePlayer.stop()
-          const progs=data.result?.suggested_progressions
-          if(progs?.length)chordPlayer.load(progs[0],data.result?.metadata?.bpm)
-        } else { setJobStatus('queued');startPolling(data.job_id) }
-        submitted = true
-      } catch(netErr) {
-        // Backend unavailable — run local demo extraction
-        if (!submitted) {
-          const demoResult = buildDemoResult(file, minConf)
-          setJobStatus('finished'); setResult(demoResult)
-          const progs = demoResult.suggested_progressions
-          if(progs?.length) chordPlayer.load(progs[0], demoResult.metadata?.bpm)
-          setJobId('demo-local')
-          setError(null) // clear any previous error
-          return
-        }
-        setError(netErr.message)
-      } finally{setUploading(false)}
+    if(!file)return
+    setUploading(true);setError(null);setResult(null);setJobId(null);setJobStatus(null)
+    const fd=new FormData()
+    fd.append('file',file);fd.append('file_type',fileType);fd.append('min_confidence',String(minConf))
+    fd.append('track_filter',instrument==='all'?'all':instrument);fd.append('user_id',user?.id||'anonymous')
+    const headers={}, token=getToken?.()
+    if(token)headers['Authorization']=`Bearer ${token}`
+    try {
+      const res=await fetch(`${API}/api/extract-chords`,{method:'POST',headers,body:fd})
+      const data=await safeJson(res)
+      if(!res.ok) throw new Error(data.detail||`Server error ${res.status}`)
+      setJobId(data.job_id)
+      if(data.mode==='sync'&&data.result){
+        setJobStatus('finished');setResult(data.result);filePlayer.stop()
+        const progs=data.result?.suggested_progressions
+        if(progs?.length)chordPlayer.load(progs[0],data.result?.metadata?.bpm)
+      } else { setJobStatus('queued');startPolling(data.job_id) }
+    } catch(e) {
+      // Backend unavailable — demo extraction
+      const demoResult = buildDemoResult(file, minConf)
+      setJobStatus('finished'); setResult(demoResult)
+      const progs = demoResult.suggested_progressions
+      if(progs?.length) chordPlayer.load(progs[0], demoResult.metadata?.bpm)
+      setJobId('demo-local'); setError(null)
+    } finally {
+      setUploading(false)
+    }
   }
 
   const filteredChords=(result?.chords||[]).filter(c=>{

@@ -162,12 +162,15 @@ function ConfirmDialog({ message, detail, onConfirm, onCancel, confirmLabel='Del
 /* ── Full-featured audio player hook ──────────────────────────── */
 // Supports: play, pause, resume, seek (drag progress), queue, playlist mode
 function useMiniPlayer() {
-  const [playing,   setPlaying]   = useState(null)  // current track object
+  const [playing,   setPlaying]   = useState(null)
   const [paused,    setPaused]    = useState(false)
-  const [progress,  setProgress]  = useState(0)     // 0–1
-  const [elapsed,   setElapsed]   = useState(0)     // seconds
-  const [queue,     setQueue]     = useState([])     // upcoming tracks
+  const [progress,  setProgress]  = useState(0)
+  const [elapsed,   setElapsed]   = useState(0)
+  const [queue,     setQueue]     = useState([])
   const [queueIdx,  setQueueIdx]  = useState(0)
+  const [shuffle,   setShuffle]   = useState(false)
+  const [muted,     setMuted]     = useState(false)
+  const [volume,    setVolume]    = useState(1)
 
   const audioRef    = useRef(null)
   const timerRef    = useRef(null)
@@ -363,6 +366,20 @@ function useMiniPlayer() {
     playNow, playPlaylist, enqueue, clearQueue,
     togglePause, pause, resume, seekTo,
     playNext, playPrev, stopAll,
+    shuffle, toggleShuffle: () => setShuffle(s=>!s),
+    muted, toggleMute: () => {
+      setMuted(m => {
+        const next = !m
+        if (audioRef.current) audioRef.current.volume = next ? 0 : volume
+        return next
+      })
+    },
+    volume, setVolumeLevel: v => {
+      setVolume(v)
+      if (audioRef.current) audioRef.current.volume = muted ? 0 : v
+    },
+    reorderQueue: (newQ) => setQueue(newQ),
+    removeFromQueue: (idx) => setQueue(q => q.filter((_,i)=>i!==idx)),
   }
 }
 
@@ -409,60 +426,129 @@ function ProgressBar({ progress, onSeek, accentColor='var(--accent)' }) {
 }
 
 /* ── Now Playing Bar — full player ────────────────────────────── */
-function NowPlayingBar({ playing, paused, progress, elapsed, queue, onTogglePause, onSeek, onNext, onPrev, onStop }) {
+function NowPlayingBar({ playing, paused, progress, elapsed, queue,
+  onTogglePause, onSeek, onNext, onPrev, onStop,
+  shuffle, onShuffle, muted, onMute, volume, onVolume, onReorder, onRemoveQ }) {
+  const [showQueue, setShowQueue] = useState(false)
+  const [showVol,   setShowVol]   = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!showQueue && !showVol) return
+    const close = e => { if (ref.current && !ref.current.contains(e.target)) { setShowQueue(false); setShowVol(false) } }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [showQueue, showVol])
+
   if (!playing) return null
-  const total = playing.duration || 28
+  const total   = playing.duration || 28
   const hasNext = queue.length > 0
 
   return (
-    <div className="now-playing-bar" style={{ padding:'.55rem 1.25rem', gap:'.65rem' }}>
-      {/* Cover */}
-      <div className="np-cover" style={{ background:coverGrad(playing.title), flexShrink:0 }}>🎵</div>
-
-      {/* Track info */}
-      <div className="np-info" style={{ flexShrink:0 }}>
-        <div className="np-title">{playing.title}</div>
-        <div className="np-artist">{playing.artist}{playing.key ? ` · ${playing.key}` : ''}</div>
-      </div>
-
-      {/* Controls */}
-      <div style={{ display:'flex',alignItems:'center',gap:'.2rem',flexShrink:0 }}>
-        {/* Prev */}
-        <button className="np-btn" onClick={onPrev} title="Previous / Restart" style={{ opacity:.75 }}>
-          <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-        </button>
-        {/* Play/Pause */}
-        <button className="np-btn np-play" onClick={onTogglePause} title={paused?'Resume':'Pause'}>
-          {paused ? <IconPlay/> : <IconPause/>}
-        </button>
-        {/* Next */}
-        <button className="np-btn" onClick={onNext} disabled={!hasNext} title={hasNext?`Next (${queue.length} queued)`:'Queue empty'} style={{ opacity:hasNext?1:.38 }}>
-          <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-        </button>
-      </div>
-
-      {/* Seekable progress bar */}
-      <div className="np-progress-wrap" style={{ flex:1,display:'flex',alignItems:'center',gap:'.5rem',minWidth:0 }}>
-        <span className="np-time" style={{ flexShrink:0 }}>{fmtDur(elapsed)}</span>
-        <ProgressBar progress={progress} onSeek={onSeek}/>
-        <span className="np-time" style={{ flexShrink:0 }}>{fmtDur(total)}</span>
-      </div>
-
-      {/* Queue badge */}
-      {hasNext && (
-        <div style={{ display:'flex',alignItems:'center',gap:'.3rem',fontSize:'.7rem',color:'var(--text-3)',flexShrink:0 }}>
-          <svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-          +{queue.length} queued
+    <div ref={ref}>
+      {/* Queue panel */}
+      {showQueue && (
+        <div style={{ position:'fixed',bottom:72,left:0,right:0,maxWidth:480,margin:'0 auto',
+          background:'rgba(10,10,22,.97)',border:'1px solid rgba(255,107,71,.22)',borderRadius:'18px 18px 0 0',
+          boxShadow:'0 -12px 48px rgba(0,0,0,.7)',zIndex:399,padding:'1rem',backdropFilter:'blur(20px)' }}>
+          <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.85rem' }}>
+            <span style={{ fontWeight:800,fontSize:'.88rem',color:'var(--accent)' }}>▣ Queue ({queue.length})</span>
+            <div style={{ display:'flex',gap:'.4rem',alignItems:'center' }}>
+              <button onClick={onShuffle} style={{ padding:'.22rem .6rem',borderRadius:999,border:`1.5px solid ${shuffle?'var(--accent)':'var(--border)'}`,background:shuffle?'rgba(255,107,71,.12)':'transparent',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.72rem',color:shuffle?'var(--accent)':'var(--text-3)',transition:'all .2s' }}>⇄ Shuffle</button>
+              <button onClick={()=>setShowQueue(false)} style={{ background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:'.85rem',padding:'.2rem .4rem' }}>✕</button>
+            </div>
+          </div>
+          <div style={{ maxHeight:240,overflowY:'auto' }}>
+            {queue.length===0 && <p style={{ color:'var(--text-3)',fontSize:'.82rem',textAlign:'center',padding:'1rem 0' }}>Queue is empty — add tracks below</p>}
+            {queue.map((t,i)=>(
+              <div key={t.id||i} style={{ display:'flex',alignItems:'center',gap:'.65rem',padding:'.42rem .3rem',borderRadius:8,transition:'background .15s',cursor:'default' }}
+                onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.04)'}
+                onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                <div style={{ width:7,height:7,borderRadius:'50%',background:'var(--accent)',flexShrink:0,opacity:.6+i*.05 }}/>
+                <div style={{ width:34,height:34,borderRadius:8,background:coverGrad(t.title),flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.85rem' }}>🎵</div>
+                <div style={{ flex:1,minWidth:0 }}>
+                  <div style={{ fontSize:'.78rem',fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{t.title}</div>
+                  <div style={{ fontSize:'.66rem',color:'var(--text-3)' }}>{t.artist||t.key||''}{t.bpm?` · ${t.bpm}bpm`:''}</div>
+                </div>
+                <button onClick={()=>onRemoveQ?.(i)} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',padding:'.15rem .3rem',borderRadius:4,transition:'all .15s',fontSize:'.8rem' }}
+                  onMouseEnter={e=>{e.currentTarget.style.color='var(--red)';e.currentTarget.style.background='rgba(220,38,38,.1)'}}
+                  onMouseLeave={e=>{e.currentTarget.style.color='var(--text-3)';e.currentTarget.style.background='transparent'}}>✕</button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* BPM */}
-      {playing.bpm && (
-        <div style={{ fontSize:'.67rem',color:'var(--text-3)',flexShrink:0 }}>{playing.bpm} BPM</div>
+      {/* Volume panel */}
+      {showVol && (
+        <div style={{ position:'fixed',bottom:72,right:16,background:'rgba(10,10,22,.97)',border:'1px solid rgba(255,255,255,.12)',borderRadius:14,padding:'1rem .85rem',zIndex:399,backdropFilter:'blur(20px)',boxShadow:'0 -8px 32px rgba(0,0,0,.6)',minWidth:52 }}>
+          <div style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.65rem' }}>
+            <button onClick={onMute} title={muted?'Unmute':'Mute'} style={{ background:'none',border:'none',cursor:'pointer',fontSize:'1.1rem',padding:'.18rem' }}>{muted?'🔇':'🔊'}</button>
+            <input type="range" min={0} max={1} step={0.05} value={muted?0:volume} onChange={e=>onVolume?.(parseFloat(e.target.value))}
+              style={{ writingMode:'vertical-lr',direction:'rtl',height:90,cursor:'pointer',accentColor:'var(--accent)' }}/>
+            <span style={{ fontSize:'.65rem',color:'var(--text-3)',fontFamily:'monospace' }}>{Math.round((muted?0:volume)*100)}%</span>
+          </div>
+        </div>
       )}
 
-      {/* Close */}
-      <button className="np-close" onClick={onStop} title="Stop playback" style={{ flexShrink:0 }}><IconX/></button>
+      {/* Main bar */}
+      <div className="now-playing-bar" style={{ padding:'.5rem 1rem',gap:'.5rem' }}>
+        {/* Animated cover */}
+        <div className="np-cover" style={{ background:coverGrad(playing.title),flexShrink:0,position:'relative',overflow:'hidden' }}>
+          <span style={{ fontSize:'1rem' }}>🎵</span>
+          {!paused && <div style={{ position:'absolute',inset:0,background:'linear-gradient(135deg,transparent,rgba(255,107,71,.18))',animation:'spin 4s linear infinite',borderRadius:'50%' }}/>}
+        </div>
+
+        {/* Info */}
+        <div className="np-info" style={{ flexShrink:0,minWidth:0,maxWidth:160 }}>
+          <div className="np-title" style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{playing.title}</div>
+          <div className="np-artist" style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
+            {playing.artist||playing.key||''}{playing.bpm?` · ${playing.bpm} BPM`:''}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div style={{ display:'flex',alignItems:'center',gap:'.18rem',flexShrink:0 }}>
+          <button className="np-btn" onClick={onPrev} title="Prev / Restart" style={{ opacity:.78 }}>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          </button>
+          <button className="np-btn np-play" onClick={onTogglePause} title={paused?'Resume':'Pause'}>
+            {paused ? <IconPlay/> : <IconPause/>}
+          </button>
+          <button className="np-btn" onClick={onNext} disabled={!hasNext} style={{ opacity:hasNext?1:.35 }} title={hasNext?`Next (${queue.length})`:'Queue empty'}>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+          </button>
+        </div>
+
+        {/* Progress */}
+        <div className="np-progress-wrap" style={{ flex:1,display:'flex',alignItems:'center',gap:'.4rem',minWidth:0 }}>
+          <span className="np-time" style={{ flexShrink:0 }}>{fmtDur(elapsed)}</span>
+          <ProgressBar progress={progress} onSeek={onSeek}/>
+          <span className="np-time" style={{ flexShrink:0 }}>{fmtDur(total)}</span>
+        </div>
+
+        {/* Right controls: shuffle, queue, volume, close */}
+        <div style={{ display:'flex',alignItems:'center',gap:'.28rem',flexShrink:0 }}>
+          {/* Shuffle */}
+          <button className="np-btn" onClick={onShuffle} title={shuffle?'Shuffle on':'Shuffle off'} style={{ color:shuffle?'var(--accent)':'var(--text-3)',background:shuffle?'rgba(255,107,71,.1)':'transparent',borderRadius:6 }}>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+          </button>
+          {/* Queue */}
+          <button className="np-btn" onClick={()=>{setShowQueue(q=>!q);setShowVol(false)}} title="Queue" style={{ position:'relative',color:showQueue?'var(--accent)':'var(--text-3)',background:showQueue?'rgba(255,107,71,.1)':'transparent',borderRadius:6 }}>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/></svg>
+            {hasNext && <span style={{ position:'absolute',top:-4,right:-4,background:'var(--accent)',color:'#fff',borderRadius:'50%',width:14,height:14,fontSize:'.52rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900 }}>{queue.length}</span>}
+          </button>
+          {/* Volume */}
+          <button className="np-btn" onClick={()=>{setShowVol(v=>!v);setShowQueue(false)}} title={muted?'Unmute':'Volume'} style={{ color:muted?'var(--text-3)':showVol?'var(--accent)':'var(--text-3)',background:showVol?'rgba(255,107,71,.1)':'transparent',borderRadius:6 }}>
+            {muted
+              ? <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+              : <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            }
+          </button>
+          {/* Close */}
+          <button className="np-close" onClick={onStop} title="Stop"><IconX/></button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -470,7 +556,7 @@ function NowPlayingBar({ playing, paused, progress, elapsed, queue, onTogglePaus
 /* ── Track row ───────────────────────────────────────────────── */
 function TrackRow({ track, dateLabel, date, onRemove, removeLabel, onToggle, playing }) {
   return (
-    <div className="lib-row" style={{ background:playing?'rgba(255,107,71,.06)':undefined, borderColor:playing?'var(--accent)':undefined }}>
+    <div className="lib-row lib-row-anim" style={{ background:playing?'rgba(255,107,71,.06)':undefined, borderColor:playing?'var(--accent)':undefined }}>
       <button onClick={() => onToggle?.(track)}
         style={{ width:42,height:42,borderRadius:9,flexShrink:0,background:coverGrad(track.title),border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.95rem',transition:'transform .15s' }}
         onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'}
@@ -680,7 +766,7 @@ function PlaylistDetail({ playlist, onBack, onRemoveTrack, onToggle, playingId, 
         ? <div className="lib-empty"><div className="lib-empty__icon">🎵</div><p className="lib-empty__text">This playlist is empty</p><Link to="/search" className="btn btn--primary btn--sm">Add tracks from Discover</Link></div>
         : <div style={{ display:'flex',flexDirection:'column',gap:'.42rem' }}>
             {playlist.tracks.map((t,i)=>(
-              <div key={t.id} className="lib-row" style={{ background:playingId===t.id?'rgba(255,107,71,.06)':undefined, borderColor:playingId===t.id?'var(--accent)':undefined }}>
+              <div key={t.id} className="lib-row lib-row-anim" style={{ background:playingId===t.id?'rgba(255,107,71,.06)':undefined, borderColor:playingId===t.id?'var(--accent)':undefined }}>
                 <span style={{ width:18,textAlign:'center',fontSize:'.72rem',color:'var(--text-3)',fontFamily:'monospace',flexShrink:0 }}>{i+1}</span>
                 <button onClick={()=>onToggle(t)} style={{ width:38,height:38,borderRadius:8,flexShrink:0,background:coverGrad(t.title),border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.85rem' }}>
                   {playingId===t.id?<span style={{color:'#fff',animation:'pulse 1s ease infinite'}}>⏸</span>:<span style={{color:'rgba(255,255,255,.55)'}}>▶</span>}
@@ -766,7 +852,7 @@ export default function Library() {
   const [openPlaylist,   setOpenPlaylist]   = useState(null)
   const [showHistory,    setShowHistory]    = useState(false)
 
-  const { playing, paused, progress, elapsed, queue, playNow, playPlaylist, enqueue, clearQueue, togglePause, seekTo, playNext, playPrev, stopAll } = useMiniPlayer()
+  const { playing, paused, progress, elapsed, queue, playNow, playPlaylist, enqueue, clearQueue, togglePause, seekTo, playNext, playPrev, stopAll, shuffle, toggleShuffle, muted, toggleMute, volume, setVolumeLevel, reorderQueue, removeFromQueue } = useMiniPlayer()
   const genPlayer = useGenPlayer()
   const toggleTrack = useCallback((track) => { playing?.id === track.id ? togglePause() : playNow(track) }, [playing, togglePause, playNow])
 
@@ -838,7 +924,7 @@ export default function Library() {
       {/* Header */}
       <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:'1rem',marginBottom:'1.5rem' }}>
         <div>
-          <div className="page-header__badge">📁 Library</div>
+          <div className="page-header__badge"><span className="lib-header-icon" style={{display:"inline-block"}}>📁</span> Library</div>
           <h1 className="page-header__title">My Library</h1>
           <p className="page-header__sub">
             {isGuest ? 'Demo library — sign in to save your own content' : `${user.username}'s collection · ${Object.values(counts).reduce((a,b)=>a+b,0)} items`}
@@ -868,10 +954,12 @@ export default function Library() {
         {/* Sidebar nav */}
         <nav style={{ background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:18,padding:'.45rem',position:'sticky',top:80,boxShadow:'var(--shadow-card)' }}>
           {NAV.map(item => (
-            <button key={item.key} onClick={()=>{setActiveSection(item.key);setSearch('');setOpenPlaylist(null)}}
-              style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.45rem',padding:'.52rem .8rem',borderRadius:12,fontFamily:'inherit',fontSize:'.82rem',fontWeight:600,width:'100%',textAlign:'left',border:'none',cursor:'pointer',transition:'all .15s',background:activeSection===item.key?'linear-gradient(135deg,rgba(255,107,71,.14),rgba(255,179,71,.09))':'transparent',color:activeSection===item.key?'var(--accent)':'var(--text-2)' }}>
+            <button key={item.key} className="nav-item-anim" onClick={()=>{setActiveSection(item.key);setSearch('');setOpenPlaylist(null)}}
+              style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.45rem',padding:'.52rem .8rem',borderRadius:12,fontFamily:'inherit',fontSize:'.82rem',fontWeight:600,width:'100%',textAlign:'left',border:'none',cursor:'pointer',transition:'all .2s cubic-bezier(.34,1.2,.64,1)',background:activeSection===item.key?'linear-gradient(135deg,rgba(255,107,71,.14),rgba(255,179,71,.09))':'transparent',color:activeSection===item.key?'var(--accent)':'var(--text-2)',transform:activeSection===item.key?'translateX(3px)':'none' }}
+              onMouseEnter={e=>{ if(activeSection!==item.key) e.currentTarget.style.background='var(--bg-2)' }}
+              onMouseLeave={e=>{ if(activeSection!==item.key) e.currentTarget.style.background='transparent' }}>
               <span style={{ display:'flex',alignItems:'center',gap:'.45rem' }}>
-                <span style={{ fontSize:'.92rem' }}>{item.icon}</span>{item.label}
+                <span style={{ fontSize:'.92rem',display:'inline-block',transition:'transform .25s' }} className={activeSection===item.key?'lib-header-icon':''}>{item.icon}</span>{item.label}
               </span>
               {counts[item.key]>0&&(
                 <span style={{ background:activeSection===item.key?'rgba(255,107,71,.22)':'var(--bg-3)',color:activeSection===item.key?'var(--accent)':'var(--text-3)',borderRadius:999,padding:'0 .4rem',fontSize:'.6rem',fontWeight:800 }}>
@@ -898,19 +986,19 @@ export default function Library() {
             </div>
           )}
 
-          <div className="fade-up">
+          <div className="fade-up section-transition" key={activeSection}>
 
             {/* OVERVIEW */}
             {activeSection==='overview'&&(
               <div>
                 <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.7rem',marginBottom:'1.4rem' }}>
                   {statCards.map(c=>(
-                    <button key={c.key} onClick={()=>setActiveSection(c.key)}
+                    <button key={c.key} className="stat-card-anim" onClick={()=>setActiveSection(c.key)}
                       style={{ background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:16,padding:'1.2rem',textAlign:'center',cursor:'pointer',transition:'all .22s cubic-bezier(.34,1.2,.64,1)',fontFamily:'inherit',position:'relative',overflow:'hidden' }}
-                      onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-4px) scale(1.02)';e.currentTarget.style.boxShadow='var(--shadow)'}}
-                      onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow=''}}>
+                      onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-6px) scale(1.03)';e.currentTarget.style.boxShadow='var(--shadow)';e.currentTarget.style.borderColor='transparent'}}
+                      onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';e.currentTarget.style.borderColor='var(--border)'}}>
                       <div style={{ position:'absolute',top:0,left:0,right:0,height:3,background:c.grad,borderRadius:'16px 16px 0 0' }}/>
-                      <div style={{ fontSize:'1.5rem',marginBottom:'.3rem' }}>{c.icon}</div>
+                      <div style={{ fontSize:'1.5rem',marginBottom:'.3rem',transition:'transform .3s' }} className="lib-header-icon">{c.icon}</div>
                       <div style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.6rem',fontWeight:900,backgroundImage:c.grad,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text' }}>{c.count}</div>
                       <div style={{ fontSize:'.68rem',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.04em',marginTop:'.12rem',fontWeight:700 }}>{c.label}</div>
                     </button>
@@ -991,7 +1079,7 @@ export default function Library() {
             {activeSection==='extractions'&&(
               filterI(extractions).length>0
                 ?<ColList>{filterI(extractions).map(item=>(
-                    <div key={item.id} className="lib-row" style={{flexDirection:'column',alignItems:'stretch',gap:'.45rem',padding:'.9rem'}}>
+                    <div key={item.id} className="lib-row lib-row-anim" style={{flexDirection:'column',alignItems:'stretch',gap:'.45rem',padding:'.9rem'}}>
                       <div style={{display:'flex',alignItems:'center',gap:'.7rem'}}>
                         <div style={{width:40,height:40,borderRadius:12,flexShrink:0,background:'linear-gradient(135deg,var(--bg-3),var(--bg-4))',border:'1.5px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem'}}>🎸</div>
                         <div className="lib-row__info">
@@ -1024,7 +1112,7 @@ export default function Library() {
                     const isAct=genPlayer.id===item.id, hasP=!!item.progressions?.length
                     const chords=item.progressions?.[0]?.split(' — ').filter(Boolean)||[]
                     return(
-                    <div key={item.id} className="lib-row" style={{flexDirection:'column',alignItems:'stretch',gap:'.55rem',padding:'1rem',background:isAct?'rgba(255,107,71,.05)':undefined,borderColor:isAct?'var(--accent)':undefined}}>
+                    <div key={item.id} className="lib-row lib-row-anim" style={{flexDirection:'column',alignItems:'stretch',gap:'.55rem',padding:'1rem',background:isAct?'rgba(255,107,71,.05)':undefined,borderColor:isAct?'var(--accent)':undefined}}>
                       <div style={{display:'flex',alignItems:'center',gap:'.7rem'}}>
                         <button onClick={()=>hasP&&genPlayer.toggle(item)}
                           style={{width:40,height:40,borderRadius:12,flexShrink:0,background:isAct?'linear-gradient(135deg,var(--accent),var(--accent-2))':'var(--bg-3)',border:`1.5px solid ${isAct?'var(--accent)':'var(--border)'}`,cursor:hasP?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',color:isAct?'#fff':'var(--text-2)',transition:'all .2s'}}>
@@ -1069,7 +1157,7 @@ export default function Library() {
       </div>
 
       {/* Now playing bar */}
-      {playing && <NowPlayingBar playing={playing} paused={paused} progress={progress} elapsed={elapsed} queue={queue} onTogglePause={togglePause} onSeek={seekTo} onNext={playNext} onPrev={playPrev} onStop={stopAll}/>}
+      {playing && <NowPlayingBar playing={playing} paused={paused} progress={progress} elapsed={elapsed} queue={queue} onTogglePause={togglePause} onSeek={seekTo} onNext={playNext} onPrev={playPrev} onStop={stopAll} shuffle={shuffle} onShuffle={toggleShuffle} muted={muted} onMute={toggleMute} volume={volume} onVolume={setVolumeLevel} onReorder={reorderQueue} onRemoveQ={removeFromQueue}/>}
 
       {/* Confirm dialog */}
       {confirm && <ConfirmDialog message={confirm.message} detail={confirm.detail} onConfirm={()=>{confirm.onConfirm();setConfirm(null)}} onCancel={()=>setConfirm(null)}/>}
