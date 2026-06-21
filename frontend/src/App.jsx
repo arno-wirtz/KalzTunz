@@ -46,6 +46,23 @@ export async function demoLogin(emailOrUser, password) {
   return user
 }
 
+/* Pre-seeded demo account — always available, even on first load */
+export const DEMO_CREDENTIALS = { username: 'demo', email: 'demo@kalztunz.com', password: 'Demo1234!' }
+
+export function ensureDemoAccountSeeded() {
+  const users = demoUsers()
+  if (users.find(u => u.email === DEMO_CREDENTIALS.email)) return
+  const demoUser = {
+    id: 'demo_seed_user', username: DEMO_CREDENTIALS.username, email: DEMO_CREDENTIALS.email,
+    password: DEMO_CREDENTIALS.password, profile_pic: null, bio: 'Exploring KalzTunz in demo mode 🎵',
+    verified: true, createdAt: new Date().toISOString(),
+  }
+  saveDemoUsers([...users, demoUser])
+}
+
+// Seed immediately on module load so the demo account always exists
+if (typeof window !== 'undefined') ensureDemoAccountSeeded()
+
 function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null)
   const [loading, setLoading] = useState(true)

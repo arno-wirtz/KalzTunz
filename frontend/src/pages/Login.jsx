@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth, safeJson, demoLogin } from '../App'
+import { useAuth, safeJson, demoLogin, DEMO_CREDENTIALS } from '../App'
 import logoImg from '../assets/kalztunz-logo.png'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" width={18} height={18} style={{flexShrink:0}}>
@@ -64,27 +64,55 @@ export default function Login() {
     } catch {}
   }, [])
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!identifier.trim() || !password) return
+  const doLogin = async (id, pw) => {
     setLoading(true); setError(null)
     try {
       const res  = await fetch(`${API}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ username: identifier.trim(), password }),
+        body: new URLSearchParams({ username: id, password: pw }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || 'Invalid credentials. Please try again.')
-      if (remember) localStorage.setItem('kalztunz_remember', JSON.stringify({ identifier: identifier.trim() }))
-      else          localStorage.removeItem('kalztunz_remember')
-      login(data.user, data.access_token, data.refresh_token)
-      navigate(from, { replace: true })
+      const data = await safeJson(res)
+      if (res.ok && data.access_token) {
+        if (remember) localStorage.setItem('kalztunz_remember', JSON.stringify({ identifier: id }))
+        else          localStorage.removeItem('kalztunz_remember')
+        login(data.user, data.access_token, data.refresh_token)
+        navigate(from, { replace: true })
+        return
+      }
+      if (res.status === 401 || res.status === 400) {
+        throw new Error(data.detail || 'Invalid credentials. Please try again.')
+      }
+      throw new Error(data.detail || `Server error (${res.status})`)
     } catch (err) {
-      setError(err.message)
+      // Backend unreachable (network error) or non-auth server error → try demo mode
+      if (err.message?.includes('Invalid credentials')) { setError(err.message); setLoading(false); return }
+      try {
+        const demoUser  = await demoLogin(id, pw)
+        const fakeToken = `demo_${btoa(unescape(encodeURIComponent(JSON.stringify(demoUser))))}`
+        if (remember) localStorage.setItem('kalztunz_remember', JSON.stringify({ identifier: id }))
+        login(demoUser, fakeToken, fakeToken)
+        navigate(from, { replace: true })
+      } catch (demoErr) {
+        setError(err.message?.includes('fetch') || err.message?.includes('Failed')
+          ? 'Backend unreachable — check your credentials or use the demo account below.'
+          : demoErr.message)
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!identifier.trim() || !password) return
+    await doLogin(identifier.trim(), password)
+  }
+
+  const handleDemoLogin = async () => {
+    setIdentifier(DEMO_CREDENTIALS.email)
+    setPassword(DEMO_CREDENTIALS.password)
+    await doLogin(DEMO_CREDENTIALS.email, DEMO_CREDENTIALS.password)
   }
 
   return (
@@ -97,6 +125,24 @@ export default function Login() {
             <h1 className="auth-title">Welcome back 👋</h1>
             <p className="auth-sub">Sign in to your KalzTunz account</p>
           </div>
+
+          {/* Demo account — works with no backend at all */}
+          <button type="button" onClick={handleDemoLogin} disabled={loading}
+            style={{
+              width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:'.5rem',
+              padding:'.7rem 1rem', borderRadius:12, marginBottom:'1rem',
+              background:'linear-gradient(135deg,rgba(255,107,71,.14),rgba(255,179,71,.1))',
+              border:'1.5px solid rgba(255,107,71,.35)', color:'var(--accent)',
+              fontFamily:'inherit', fontWeight:700, fontSize:'.86rem', cursor:'pointer',
+              transition:'all .2s',
+            }}
+            onMouseEnter={e=>{e.currentTarget.style.background='linear-gradient(135deg,rgba(255,107,71,.22),rgba(255,179,71,.16))';e.currentTarget.style.transform='translateY(-1px)'}}
+            onMouseLeave={e=>{e.currentTarget.style.background='linear-gradient(135deg,rgba(255,107,71,.14),rgba(255,179,71,.1))';e.currentTarget.style.transform='none'}}>
+            {loading ? <span className="spinner" style={{width:14,height:14,borderWidth:2}}/> : '⚡'} Try Demo Account — no signup needed
+          </button>
+          <p style={{ textAlign:'center', fontSize:'.72rem', color:'var(--text-3)', marginBottom:'1.1rem', fontFamily:"'Space Mono',monospace" }}>
+            {DEMO_CREDENTIALS.email} / {DEMO_CREDENTIALS.password}
+          </p>
 
           {/* OAuth */}
           <div style={{display:'flex',flexDirection:'column',gap:'.5rem',marginBottom:'1.25rem'}}>

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../App'
 import { useTheme } from '../ThemeContext'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
 
 /* ── helpers ────────────────────────────────────────── */
 function Toggle({ on, onChange, label, desc }) {

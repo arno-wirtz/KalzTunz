@@ -4,7 +4,7 @@ import { useAuth } from '../App'
 import { ChordSynth, buildLocal, buildScaleRef, fmtDur, KEY_FREQS, chordFreqs, saveGenerationToLib } from '../utils/musicEngine'
 import { safeJson } from '../App'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
 
 /* ── Data ───────────────────────────────────────────────────── */
 const GENRES = [

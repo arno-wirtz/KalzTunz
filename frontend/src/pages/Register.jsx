@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth, safeJson, demoRegister } from '../App'
 import { AuthLogoPanel } from './Login'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
 
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" width={18} height={18} style={{flexShrink:0}}>
@@ -120,15 +120,35 @@ export default function Register() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password, confirm_password: confirm }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || 'Registration failed. Please try again.')
-      setSuccess(true)
-      setTimeout(() => {
-        login(data.user, data.access_token, data.refresh_token, true)
-        navigate('/', { replace: true })
-      }, 1200)
+      const data = await safeJson(res)
+      if (res.ok && data.access_token) {
+        setSuccess(true)
+        setTimeout(() => {
+          login(data.user, data.access_token, data.refresh_token, true)
+          navigate('/', { replace: true })
+        }, 1200)
+        return
+      }
+      if (res.status === 409 || res.status === 422) {
+        throw new Error(data.detail || 'That username or email is already taken.')
+      }
+      throw new Error(data.detail || `Server error (${res.status})`)
     } catch (err) {
-      setError(err.message)
+      if (err.message?.includes('already taken') || err.message?.includes('already registered')) {
+        setError(err.message); setLoading(false); return
+      }
+      // Backend unreachable — fall back to demo registration
+      try {
+        const demoUser  = await demoRegister(username, email, password)
+        const fakeToken = `demo_${btoa(unescape(encodeURIComponent(JSON.stringify(demoUser))))}`
+        setSuccess(true)
+        setTimeout(() => {
+          login(demoUser, fakeToken, fakeToken, true)
+          navigate('/', { replace: true })
+        }, 1200)
+      } catch (demoErr) {
+        setError(demoErr.message)
+      }
     } finally {
       setLoading(false)
     }

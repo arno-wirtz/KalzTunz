@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../App'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
 
 const STATS = [
   { value:'50+',  label:'Audio formats', sub:'MP3 WAV FLAC OGG MP4…',       icon:'🎼', grad:'linear-gradient(135deg,var(--accent),var(--accent-2))' },
