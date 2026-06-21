@@ -18,6 +18,34 @@ import './App.css'
 const AuthContext = createContext(null)
 export function useAuth() { return useContext(AuthContext) }
 
+/* safeJson — never throws "Unexpected end of JSON input" on empty/bad bodies */
+export async function safeJson(res) {
+  const text = await res.text()
+  if (!text.trim()) return { detail: `HTTP ${res.status}` }
+  try { return JSON.parse(text) } catch { return { detail: text.slice(0, 200) } }
+}
+
+/* Demo / guest auth — works entirely in localStorage when backend is unavailable */
+const DEMO_KEY = 'kalztunz_demo_users'
+function demoUsers() { try { return JSON.parse(localStorage.getItem(DEMO_KEY)||'[]') } catch { return [] } }
+function saveDemoUsers(u) { localStorage.setItem(DEMO_KEY, JSON.stringify(u)) }
+
+export async function demoRegister(username, email, password) {
+  const users = demoUsers()
+  if (users.find(u => u.email===email))        throw new Error('Email already registered')
+  if (users.find(u => u.username===username))  throw new Error('Username already taken')
+  const user = { id:`demo_${Date.now()}`, username, email, password, profile_pic:null, bio:'', verified:false, createdAt: new Date().toISOString() }
+  saveDemoUsers([...users, user])
+  return user
+}
+
+export async function demoLogin(emailOrUser, password) {
+  const users = demoUsers()
+  const user = users.find(u => (u.email===emailOrUser||u.username===emailOrUser) && u.password===password)
+  if (!user) throw new Error('Invalid credentials')
+  return user
+}
+
 function AuthProvider({ children }) {
   const [user,    setUser]    = useState(null)
   const [loading, setLoading] = useState(true)
