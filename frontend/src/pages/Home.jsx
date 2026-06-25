@@ -46,10 +46,19 @@ export default function Home() {
     setDemoLoading(true)
     try {
       const r = await fetch(`${API}/api/demo/chords`)
-      const d = await r.json()
-      setDemoChords(d.chords || [])
+      const text = await r.text()
+      const d = text.trim() ? JSON.parse(text) : {}
+      if (!r.ok || !d.chords) throw new Error('no data')
+      setDemoChords(d.chords)
       setDemoMeta(d.metadata || null)
-    } catch {} finally { setDemoLoading(false) }
+    } catch {
+      // Backend unavailable — show a static local sample so the section never looks broken
+      setDemoChords([
+        { name:'C',  time:0.0 }, { name:'Am', time:2.0 },
+        { name:'F',  time:4.0 }, { name:'G',  time:6.0 },
+      ])
+      setDemoMeta({ key:'C major', bpm:120, duration:8 })
+    } finally { setDemoLoading(false) }
   }
 
   useEffect(() => { loadDemo() }, [])

@@ -18,6 +18,8 @@ export default defineConfig({
     outDir: '../dist',
     emptyOutDir: true,
     sourcemap: false,
+    minify: 'esbuild',
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
         // vite 8 requires manualChunks as a Function, not Object
@@ -27,6 +29,9 @@ export default defineConfig({
               id.includes('node_modules/react-router-dom') ||
               id.includes('node_modules/scheduler')) {
             return 'vendor'
+          }
+          if (id.includes('node_modules/jspdf') || id.includes('node_modules/html2canvas')) {
+            return 'pdf'
           }
         },
       },

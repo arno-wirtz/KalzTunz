@@ -10,16 +10,35 @@
 
 import { useState, useCallback, useRef } from 'react'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
+
+async function safeJson(res) {
+  const text = await res.text()
+  if (!text.trim()) return { detail: `HTTP ${res.status}` }
+  try { return JSON.parse(text) } catch { return { detail: text.slice(0, 200) } }
+}
+
+function friendlyError(err) {
+  const msg = err?.message || String(err)
+  if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+    return 'Cannot reach the server right now. Check your connection or try again shortly.'
+  }
+  return msg
+}
 
 // ── tiny fetch wrapper ────────────────────────────────
 async function spotifyFetch(path, params = {}) {
-  const url = new URL(`${API}/api/spotify${path}`)
+  const url = new URL(`${API}/api/spotify${path}`, window.location.origin)
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) url.searchParams.set(k, String(v))
   })
-  const res = await fetch(url.toString())
-  const data = await res.json()
+  let res
+  try {
+    res = await fetch(url.toString())
+  } catch (netErr) {
+    throw new Error('Cannot reach the server right now. Check your connection or try again shortly.')
+  }
+  const data = await safeJson(res)
   if (!res.ok) throw new Error(data.detail || `Spotify API error (${res.status})`)
   return data
 }
@@ -36,7 +55,7 @@ export function useSpotify() {
       const result = await fn()
       return result
     } catch (err) {
-      setError(err.message)
+      setError(friendlyError(err))
       return null
     } finally {
       setLoading(false)

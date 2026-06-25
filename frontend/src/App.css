@@ -748,57 +748,7 @@ div:hover > .history-del-btn, div:hover .history-del-btn { opacity:1!important; 
 .upload-zone__title { color: var(--text) !important; }
 .upload-zone__sub   { color: var(--text-2) !important; }
 
-/* ═══════════════════════════════════════════════════════════════
-   LIGHT MODE — COSMIC PAGE THEMES
-   Out-of-this-world: space teal, burnt red, deep indigo, starfield
-   Applied per route via body class (.page--extract, .page--generate, .page--search)
-   The page-wrap gets the theme. Pages themselves retain normal text.
-   ═══════════════════════════════════════════════════════════════ */
 
-/* Extraction page — deep space teal + starfield */
-[data-theme="light"] .page--extract {
-  --page-accent: #006e7a;
-  --page-tint:   rgba(0,110,122,.06);
-  --page-border: rgba(0,110,122,.2);
-  --page-glow:   0 0 32px rgba(0,180,200,.18);
-  background: linear-gradient(160deg,#eaf9fb 0%,#f4ffff 40%,#e8f4f0 100%);
-}
-[data-theme="light"] .page--extract .card {
-  background: rgba(255,255,255,.85);
-  border-color: rgba(0,110,122,.14);
-  backdrop-filter: blur(12px);
-}
-[data-theme="light"] .page--extract .page-header__badge {
-  background: rgba(0,110,122,.1);
-  border-color: rgba(0,110,122,.25);
-  color: #006e7a;
-}
-[data-theme="light"] .page--extract .page-header__title { color: #003a42; }
-[data-theme="light"] .page--extract .btn--primary {
-  background: linear-gradient(135deg,#006e7a,#00a896);
-  box-shadow: 0 4px 18px rgba(0,110,122,.28);
-}
-
-/* Generate page — burnt sienna + warm nebula */
-[data-theme="light"] .page--generate {
-  --page-accent: #8b2a0a;
-  --page-tint:   rgba(139,42,10,.06);
-  background: linear-gradient(160deg,#fff8f5 0%,#fff2ec 40%,#fdf5ee 100%);
-}
-[data-theme="light"] .page--generate .card {
-  background: rgba(255,255,255,.88);
-  border-color: rgba(139,42,10,.12);
-}
-[data-theme="light"] .page--generate .page-header__badge {
-  background: rgba(139,42,10,.1);
-  border-color: rgba(139,42,10,.22);
-  color: #8b2a0a;
-}
-[data-theme="light"] .page--generate .page-header__title { color: #5a1a04; }
-[data-theme="light"] .page--generate .btn--primary {
-  background: linear-gradient(135deg,#c0392b,#e74c3c);
-  box-shadow: 0 4px 18px rgba(192,57,43,.28);
-}
 
 /* ── Search / Discover page — deep space dark blue (both themes) ── */
 
@@ -1269,34 +1219,7 @@ div:hover > .history-del-btn, div:hover .history-del-btn { opacity:1!important; 
     linear-gradient(175deg, #050d1a 0%, #080e24 35%, #060b1e 65%, #040918 100%) !important;
 }
 
-/* Library page — warm vintage parchment gold */
-[data-theme="light"] .page--library {
-  background: linear-gradient(160deg,#fffbf2 0%,#fff8e8 40%,#fdf5dd 100%);
-}
-[data-theme="light"] .page--library .card { background: rgba(255,255,255,.9); border-color: rgba(160,120,40,.14); }
-[data-theme="light"] .page--library .page-header__title { color: #5a3a00; }
-
-/* Starfield texture overlay (purely decorative via pseudo) */
-[data-theme="light"] .page--extract::before,
-[data-theme="light"] .page--generate::before,
-[data-theme="light"] .page--search::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background-image:
-    radial-gradient(1px 1px at 12% 18%, rgba(0,0,0,.12) 0%, transparent 100%),
-    radial-gradient(1px 1px at 34% 62%, rgba(0,0,0,.09) 0%, transparent 100%),
-    radial-gradient(1px 1px at 67% 28%, rgba(0,0,0,.10) 0%, transparent 100%),
-    radial-gradient(1px 1px at 82% 75%, rgba(0,0,0,.08) 0%, transparent 100%),
-    radial-gradient(1.5px 1.5px at 48% 44%, rgba(0,0,0,.10) 0%, transparent 100%),
-    radial-gradient(1px 1px at 91% 12%, rgba(0,0,0,.08) 0%, transparent 100%),
-    radial-gradient(1px 1px at 5% 88%, rgba(0,0,0,.09) 0%, transparent 100%);
-}
-[data-theme="light"] .page--extract > *,
-[data-theme="light"] .page--generate > *,
-[data-theme="light"] .page--search > * { position: relative; z-index: 1; }
+/* (removed: stale light-parchment override + duplicate starfield, superseded by the always-dark atmospheric theme above) */
 
 /* ════════════════════════════════════════════════════════════
    LIBRARY PAGE — animation system
@@ -1404,3 +1327,143 @@ div:hover > .history-del-btn, div:hover .history-del-btn { opacity:1!important; 
 .now-playing-bar { animation: libFadeUp .4s cubic-bezier(.2,.8,.2,1); }
 
 /* Spin keyframe used by NowPlayingBar cover */
+
+/* ════════════════════════════════════════════════════════════
+   READABILITY FIX — force light text on all atmospheric dark
+   pages regardless of OS theme (these pages keep a dark bg
+   always, so body text must never inherit the light-mode
+   near-black --text variable)
+════════════════════════════════════════════════════════════ */
+
+/* Home — warm amber tones */
+.page--home { color: #fde9c8 !important; }
+.page--home .muted, .page--home .muted-3,
+.page--home p, .page--home span:not([class]), .page--home li,
+.page--home [style*="color: var(--text-2)"],
+.page--home [style*="color:var(--text-2)"]  { color: #fbbf24cc !important; }
+.page--home [style*="color: var(--text-3)"],
+.page--home [style*="color:var(--text-3)"]  { color: #d9a85fbb !important; }
+.page--home h1, .page--home h2, .page--home h3 { color: #fde9c8 !important; }
+.page--home .form-input, .page--home .form-select {
+  background: rgba(30,12,2,.8) !important; border-color: rgba(251,146,60,.3) !important; color: #fde9c8 !important;
+}
+
+/* Generate — steel blue / cyan tones */
+.page--generate { color: #dbeefe !important; }
+.page--generate .muted, .page--generate .muted-3,
+.page--generate p, .page--generate span:not([class]), .page--generate li,
+.page--generate [style*="color: var(--text-2)"],
+.page--generate [style*="color:var(--text-2)"]  { color: #7dd3fccc !important; }
+.page--generate [style*="color: var(--text-3)"],
+.page--generate [style*="color:var(--text-3)"]  { color: #5eaedabb !important; }
+.page--generate h1, .page--generate h2, .page--generate h3 { color: #dbeefe !important; }
+.page--generate label, .page--generate .form-label { color: #93c5fd !important; }
+
+/* Extract — teal / sand tones */
+.page--extract { color: #d0fdf4 !important; }
+.page--extract .muted, .page--extract .muted-3,
+.page--extract p, .page--extract span:not([class]), .page--extract li,
+.page--extract [style*="color: var(--text-2)"],
+.page--extract [style*="color:var(--text-2)"]  { color: #5eead4cc !important; }
+.page--extract [style*="color: var(--text-3)"],
+.page--extract [style*="color:var(--text-3)"]  { color: #4fb8a8bb !important; }
+.page--extract h1, .page--extract h2, .page--extract h3 { color: #d0fdf4 !important; }
+.page--extract label, .page--extract .form-label { color: #99f6e4 !important; }
+
+/* Library — indigo / violet tones */
+.page--library { color: #ede9fe !important; }
+.page--library .muted, .page--library .muted-3,
+.page--library p, .page--library span:not([class]), .page--library li,
+.page--library [style*="color: var(--text-2)"],
+.page--library [style*="color:var(--text-2)"]  { color: #c4b5fdcc !important; }
+.page--library [style*="color: var(--text-3)"],
+.page--library [style*="color:var(--text-3)"]  { color: #a78bfabb !important; }
+.page--library h1, .page--library h2, .page--library h3 { color: #ede9fe !important; }
+.page--library label, .page--library .form-label { color: #c4b5fd !important; }
+.page--library .form-input, .page--library .form-select {
+  background: rgba(6,4,26,.8) !important; border-color: rgba(99,102,241,.3) !important; color: #ede9fe !important;
+}
+
+/* Universal: stat numbers / lib-row titles / chord pills must stay visible
+   on all 5 atmospheric pages even though they don't use the muted classes */
+.page--home .lib-row__title, .page--generate .lib-row__title,
+.page--extract .lib-row__title, .page--library .lib-row__title,
+.page--search .lib-row__title { color: inherit !important; }
+
+.page--home button, .page--generate button, .page--extract button,
+.page--library button, .page--search button { color: inherit; }
+.page--home .btn--primary, .page--generate .btn--primary,
+.page--extract .btn--primary, .page--library .btn--primary,
+.page--search .btn--primary { color: #fff !important; }
+
+/* ════════════════════════════════════════════════════════════
+   READABILITY — override CSS vars per atmospheric page
+   Works for ALL components (inline styles, classes) since
+   every component reads --text / --text-2 / --text-3 already
+════════════════════════════════════════════════════════════ */
+
+/* Home — warm amber, dark bg always */
+.page--home {
+  --text:      #fde9c8;
+  --text-2:    #f6bc6a;
+  --text-3:    #c88d3d;
+  --bg-1:      rgba(28,10,2,.72);
+  --bg-2:      rgba(40,16,4,.65);
+  --bg-3:      rgba(52,22,6,.60);
+  --bg-4:      rgba(64,28,8,.55);
+  --border:    rgba(251,146,60,.22);
+  --border-hi: rgba(255,107,71,.35);
+}
+
+/* Generate — steel blue / cyan */
+.page--generate {
+  --text:      #dbeefe;
+  --text-2:    #7dd3fc;
+  --text-3:    #4a9fc8;
+  --bg-1:      rgba(4,14,30,.78);
+  --bg-2:      rgba(6,18,36,.70);
+  --bg-3:      rgba(8,22,42,.65);
+  --bg-4:      rgba(10,26,48,.60);
+  --border:    rgba(14,165,233,.22);
+  --border-hi: rgba(56,189,248,.38);
+}
+
+/* Extract — teal / ocean sand */
+.page--extract {
+  --text:      #d0fdf4;
+  --text-2:    #5eead4;
+  --text-3:    #3ab8a0;
+  --bg-1:      rgba(3,15,14,.76);
+  --bg-2:      rgba(4,18,16,.68);
+  --bg-3:      rgba(5,22,20,.62);
+  --bg-4:      rgba(6,26,24,.56);
+  --border:    rgba(20,184,166,.22);
+  --border-hi: rgba(94,234,212,.38);
+}
+
+/* Library — indigo / violet */
+.page--library {
+  --text:      #ede9fe;
+  --text-2:    #c4b5fd;
+  --text-3:    #8b76d6;
+  --bg-1:      rgba(6,4,26,.76);
+  --bg-2:      rgba(8,6,32,.68);
+  --bg-3:      rgba(10,8,38,.62);
+  --bg-4:      rgba(12,10,44,.56);
+  --border:    rgba(99,102,241,.22);
+  --border-hi: rgba(139,92,246,.38);
+}
+
+/* Ensure select/input text is always readable on atmospheric pages */
+.page--home .form-input, .page--home .form-select,
+.page--generate .form-input, .page--generate .form-select,
+.page--extract .form-input, .page--extract .form-select,
+.page--library .form-input, .page--library .form-select {
+  color: var(--text) !important;
+}
+
+/* Range slider thumb colours per page */
+.page--home input[type=range]     { accent-color: var(--accent); }
+.page--generate input[type=range] { accent-color: #0284c7; }
+.page--extract input[type=range]  { accent-color: #0d9488; }
+.page--library input[type=range]  { accent-color: #7c3aed; }

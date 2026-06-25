@@ -456,7 +456,7 @@ async def extract_chords(
 
     fake_job_id = uuid.uuid4().hex
     logger.info("Sync extraction complete: %d chords, job_id=%s", len(result.get("chords",[])), fake_job_id)
-    return {
+    sync_response = {
         "ok":       True,
         "job_id":   fake_job_id,
         "uploaded": saved_name,
@@ -465,30 +465,48 @@ async def extract_chords(
         "result":   result,
         "mode":     "sync",
     }
+    # Store so /api/jobs/{id} can serve it even without Redis
+    _sync_job_store[fake_job_id] = {"job_id": fake_job_id, "status": "finished", "result": result, "meta": {}}
+    # Limit store size
+    if len(_sync_job_store) > 500:
+        oldest = next(iter(_sync_job_store))
+        _sync_job_store.pop(oldest, None)
+    return sync_response
 
 # ==================== JOB TRACKING ====================
 
+# In-memory store for sync jobs (used when Redis is unavailable)
+_sync_job_store: dict = {}
+
 @app.get("/api/jobs/{job_id}", tags=["Job Tracking"], summary="Poll job status and results")
-def get_job_status(job_id: str, conn: redis.Redis = Depends(require_redis)):
+def get_job_status(job_id: str, conn: Optional[redis.Redis] = Depends(get_redis_conn)):
     _assert_valid_job_id(job_id)
-    try:
-        job     = Job.fetch(job_id, connection=conn)
-        jstatus = str(job.get_status())
-        result  = job.result if jstatus == "finished" else None
-        error   = (str(job.exc_info) or "Job failed.") if jstatus == "failed" else None
-        return {
-            "job_id": job_id,
-            "status": jstatus,
-            "meta": job.meta or {},
-            "result": result,
-            "error": error,
-            "enqueued_at": job.enqueued_at.isoformat() if job.enqueued_at else None,
-            "started_at":  job.started_at.isoformat()  if job.started_at  else None,
-            "ended_at":    job.ended_at.isoformat()     if job.ended_at    else None,
-        }
-    except Exception as exc:
-        logger.error("Failed to fetch job %s: %s", job_id, exc)
-        raise HTTPException(status_code=404, detail="Job not found or expired.")
+
+    # Check in-memory store first (sync jobs stored here when Redis is absent)
+    if job_id in _sync_job_store:
+        return _sync_job_store[job_id]
+
+    # Then try Redis
+    if conn:
+        try:
+            job     = Job.fetch(job_id, connection=conn)
+            jstatus = str(job.get_status())
+            result  = job.result if jstatus == "finished" else None
+            error   = (str(job.exc_info) or "Job failed.") if jstatus == "failed" else None
+            return {
+                "job_id": job_id,
+                "status": jstatus,
+                "meta": job.meta or {},
+                "result": result,
+                "error": error,
+                "enqueued_at": job.enqueued_at.isoformat() if job.enqueued_at else None,
+                "started_at":  job.started_at.isoformat()  if job.started_at  else None,
+                "ended_at":    job.ended_at.isoformat()     if job.ended_at    else None,
+            }
+        except Exception as exc:
+            logger.error("Failed to fetch job %s: %s", job_id, exc)
+
+    raise HTTPException(status_code=404, detail="Job not found or expired.")
 
 
 @app.delete("/api/jobs/{job_id}", tags=["Job Tracking"], summary="Cancel a queued job")

@@ -387,11 +387,21 @@ export default function Extraction() {
 
           <div>
             <div style={{ fontWeight:700,fontSize:'.78rem',color:'var(--text-2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.5rem' }}>1 · Upload</div>
-            <div className={`upload-zone${dragging?' upload-zone--drag':''}`} onDragOver={e=>{e.preventDefault();setDragging(true)}} onDragLeave={()=>setDragging(false)} onDrop={onDrop} onClick={()=>inputRef.current?.click()} style={{ borderRadius:16,minHeight:105 }}>
+            {/* Hidden file input — NOT overlaying the whole zone to prevent double-trigger */}
+            <input ref={inputRef} type="file" accept={ACCEPTED}
+              onChange={e => { pickFile(e.target.files?.[0]); e.target.value = '' }}
+              style={{ display:'none' }}/>
+            <div className={`upload-zone${dragging?' upload-zone--drag':''}`}
+              onDragOver={e=>{e.preventDefault();setDragging(true)}}
+              onDragLeave={()=>setDragging(false)}
+              onDrop={onDrop}
+              onClick={()=>inputRef.current?.click()}
+              style={{ borderRadius:16,minHeight:105,cursor:'pointer' }}>
               <div className="upload-zone__icon" style={{ fontSize:'2rem' }}>{file?'🎵':'📂'}</div>
               <div className="upload-zone__title" style={{ fontSize:'.88rem' }}>{file?file.name:'Drop audio or video here'}</div>
-              <div className="upload-zone__sub" style={{ fontSize:'.74rem' }}>{file?`${(file.size/1024/1024).toFixed(2)} MB · ${fileType}`:'MP3 WAV FLAC OGG AAC MP4 MOV'}</div>
-              <input ref={inputRef} type="file" accept={ACCEPTED} onChange={e=>pickFile(e.target.files?.[0])} style={{ position:'absolute',inset:0,opacity:0,cursor:'pointer' }}/>
+              <div className="upload-zone__sub" style={{ fontSize:'.74rem' }}>
+                {file?`${(file.size/1024/1024).toFixed(2)} MB · ${fileType}`:'MP3 WAV FLAC OGG AAC MP4 MOV'}
+              </div>
             </div>
           </div>
 

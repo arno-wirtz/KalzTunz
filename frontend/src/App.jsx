@@ -1,16 +1,17 @@
 import { useState, useEffect, useContext, createContext, useCallback, useRef } from 'react'
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { ThemeProvider, useTheme } from './ThemeContext'
-import Home from './pages/Home'
-import Generate from './pages/Generate'
-import Extraction from './pages/Extraction'
-import Search from './pages/Search'
-import Library from './pages/Library'
-import Settings from './pages/Settings'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import AuthCallback from './pages/AuthCallback'
-import Tutorial, { useTutorial } from './pages/Tutorial'
+import { lazy, Suspense } from 'react'
+const Home        = lazy(() => import('./pages/Home'))
+const Generate    = lazy(() => import('./pages/Generate'))
+const Extraction  = lazy(() => import('./pages/Extraction'))
+const Search      = lazy(() => import('./pages/Search'))
+const Library     = lazy(() => import('./pages/Library'))
+const Settings    = lazy(() => import('./pages/Settings'))
+const Login       = lazy(() => import('./pages/Login'))
+const Register    = lazy(() => import('./pages/Register'))
+const AuthCallback= lazy(() => import('./pages/AuthCallback'))
+import Tutorial, { useTutorial } from './pages/Tutorial'  // keep eager — tiny + used in header
 import './App.css'
 
 // ==================== AUTH CONTEXT ====================
@@ -292,7 +293,13 @@ function AppInner() {
     <div className="app">
       <Nav />
       <main className="main">
-        <Routes>
+        <Suspense fallback={
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'60vh', flexDirection:'column', gap:'1rem' }}>
+      <div style={{ width:40, height:40, border:'3px solid var(--border)', borderTopColor:'var(--accent)', borderRadius:'50%', animation:'spin .8s linear infinite' }}/>
+      <span style={{ color:'var(--text-3)', fontSize:'.82rem', fontFamily:"'Space Mono',monospace" }}>Loading…</span>
+    </div>
+  }>
+  <Routes>
           {/* Home is the default landing page */}
           <Route path="/"              element={<Home />} />
           <Route path="/search"        element={<Search />} />
@@ -306,6 +313,7 @@ function AppInner() {
           {/* Catch-all redirects to home */}
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Routes>
+  </Suspense>
       </main>
 
       <footer className="footer">

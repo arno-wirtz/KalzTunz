@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useTutorial } from './Tutorial'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../App'
+import { useAuth, safeJson } from '../App'
 import { useTheme } from '../ThemeContext'
 
 const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
@@ -38,31 +38,31 @@ function Section({ title, children }) {
 
 /* ── Avatar Upload Modal ────────────────────────────── */
 function AvatarModal({ currentSrc, onSave, onClose }) {
-  const [tab,     setTab]    = useState('local')   // local | url | google
-  const [preview, setPreview]= useState(currentSrc || '')
-  const [urlInput,setUrlInput]= useState('')
-  const [error,   setError]  = useState(null)
-  const [saving,  setSaving] = useState(false)
+  const [tab,      setTab]     = useState('local')
+  const [preview,  setPreview] = useState(currentSrc || '')
+  const [urlInput, setUrlInput]= useState('')
+  const [urlOk,    setUrlOk]   = useState(false)
+  const [error,    setError]   = useState(null)
+  const [saving,   setSaving]  = useState(false)
   const fileRef = useRef(null)
 
   const handleFile = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) { setError('Please select an image file'); return }
-    if (file.size > 5 * 1024 * 1024) { setError('Image must be under 5 MB'); return }
+    if (file.size > 8 * 1024 * 1024) { setError('Image must be under 8 MB'); return }
     setError(null)
     const reader = new FileReader()
-    reader.onload = (ev) => setPreview(ev.target.result)
+    reader.onload = (ev) => { setPreview(ev.target.result); setUrlOk(true) }
     reader.readAsDataURL(file)
   }
 
   const handleUrl = () => {
     const trimmed = urlInput.trim()
-    if (!trimmed) { setError('Enter a valid image URL'); return }
-    // Basic URL check
-    try { new URL(trimmed) } catch { setError('Invalid URL'); return }
-    setError(null)
-    setPreview(trimmed)
+    if (!trimmed) { setError('Paste an image URL (https://...)'); return }
+    try { new URL(trimmed) } catch { setError('Invalid URL — must start with https://'); return }
+    if (!trimmed.startsWith('https://')) { setError('Only https:// URLs are accepted'); return }
+    setError(null); setPreview(trimmed)
   }
 
   const handleSave = async () => {
@@ -112,7 +112,7 @@ function AvatarModal({ currentSrc, onSave, onClose }) {
             fontSize:'2.2rem',flexShrink:0,
           }}>
             {preview
-              ? <img src={preview} alt="Preview" style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={() => { setPreview(''); setError('Could not load image from that URL') }} />
+              ? <img src={preview} alt="Preview" crossOrigin="anonymous" referrerPolicy="no-referrer" style={{ width:'100%',height:'100%',objectFit:'cover' }} onError={() => { setPreview(''); setError('Could not load image — try a direct image link ending in .jpg/.png') }} onLoad={()=>setUrlOk(true)}/>
               : '👤'
             }
           </div>
@@ -296,7 +296,7 @@ function AccountPanel() {
           body: JSON.stringify({ username, bio, location, website }),
         })
         if (!res.ok) { const d = await res.json().catch(()=>({})); throw new Error(d.detail||'Save failed') }
-        const updated = await res.json()
+        const updated = await safeJson(res)
         updateUser(updated)
       } else { updateUser({ username, bio, location, website }) }
       setMsg({ type:'success', text:'Profile updated successfully ✓' })

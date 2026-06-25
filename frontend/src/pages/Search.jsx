@@ -509,19 +509,16 @@ export default function Search() {
     spotify.getFeatured(20).then(res => { if (res?.tracks) { setTracks(res.tracks); setTab('tracks') } })
   }, [configured, firstLoad, query])
 
+  // Re-run search when searchType changes (user changed type filter while query is active)
   useEffect(() => {
     if (!query || !configured) return
-    setMood(null); setActiveMood(null)
     spotify.searchSpotify(query, searchType, 30).then(res => {
       if (!res) return
       if (res.tracks)  setTracks(res.tracks)
       if (res.artists) setArtists(res.artists)
       if (res.albums)  setAlbums(res.albums)
-      if (searchType==='artist') setTab('artists')
-      else if (searchType==='album') setTab('albums')
-      else setTab('tracks')
     })
-  }, [query, searchType, configured])
+  }, [searchType])  // Only re-fire when type changes, not on every query change
 
   useEffect(() => {
     const q = searchParams.get('q') || ''
@@ -534,19 +531,34 @@ export default function Search() {
     return () => document.body.classList.remove('has-player')
   }, [!!nowPlaying])
 
-  const executeSearch = useCallback((q, type = searchType) => {
-    if (!q.trim()) return
-    addToHistory(q.trim(), type.includes('artist') && !type.includes(',') ? 'artist' : 'search')
+  const executeSearch = useCallback(async (q, type = searchType) => {
+    const trimmed = q?.trim()
+    if (!trimmed) return
+    addToHistory(trimmed, type.includes('artist') && !type.includes(',') ? 'artist' : 'search')
     setLocalHistory(loadHistory().slice(0, 6))
-    setQuery(q.trim())
-    setSearchParams({ q: q.trim() })
+    setQuery(trimmed)
+    setSearchParams({ q: trimmed })
     setInputFocused(false)
     setTypeDropdown(false)
-  }, [searchType])
+    setMood(null); setActiveMood(null)
+    // Fire search immediately instead of waiting for useEffect to re-run
+    const res = await spotify.searchSpotify(trimmed, type, 30)
+    if (!res) return
+    if (res.tracks)  setTracks(res.tracks)
+    if (res.artists) setArtists(res.artists)
+    if (res.albums)  setAlbums(res.albums)
+    // Auto-switch tab to most relevant result
+    if (type === 'artist')      setTab('artists')
+    else if (type === 'album')  setTab('albums')
+    else if (res.tracks?.length)  setTab('tracks')
+    else if (res.artists?.length) setTab('artists')
+    else if (res.albums?.length)  setTab('albums')
+  }, [searchType, spotify])
 
   const handleSearchSubmit = e => {
     e.preventDefault()
-    executeSearch(inputVal)
+    if (!inputVal.trim()) return
+    executeSearch(inputVal.trim())
   }
 
   const clearSearch = () => {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams, Link } from 'react-router-dom'
-import { useAuth } from '../App'
+import { useAuth, safeJson } from '../App'
 
 const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
 
@@ -30,7 +30,7 @@ export default function AuthCallback() {
     })
       .then(r => {
         if (!r.ok) throw new Error(`Profile fetch failed (${r.status})`)
-        return r.json()
+        return safeJson(r)
       })
       .then(user => {
         if (!user?.id) throw new Error('Invalid user profile received')

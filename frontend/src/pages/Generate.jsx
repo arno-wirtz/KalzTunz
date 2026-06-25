@@ -645,53 +645,186 @@ function PlayerBar({player,chords,title}) {
 /* ── SVG Sheet Music ───────────────────────────────────────── */
 function SheetMusicView({result,player}) {
   if(!result?.progressions?.length)return null
-  const progs=result.progressions
-  const scale=result.scaleRef||buildScaleRef(result.key||'C',result.mode||'major')
-  const COLORS=['var(--accent)','var(--accent-2)','var(--accent-3)','#e87a30','#8b5cf6','var(--green)']
-  const SP=10, NOTE_POS={C:5,D:6,E:0,F:1,G:2,A:3,B:4}
+  const progs  = result.progressions
+  const scale  = result.scaleRef||buildScaleRef(result.key||'C',result.mode||'major')
+  const COLORS = ['#f97316','#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#06b6d4']
+  // Staff geometry
+  const SP = 11            // px between lines (bigger = more readable)
+  const STAFF_TOP = 32     // px from svg top
+  const STAFF_H   = 4*SP   // full staff height
+  const BOX_H     = 26     // chord label box height below staff
+  const SVG_H     = STAFF_TOP + STAFF_H + BOX_H + 24  // total height
+  const NOTE_POS  = {C:5,D:6,E:0,F:1,G:2,A:3,B:4}   // semitone→staff-step
+  const QUALITY   = { '':'maj', 'm':'min', 'dim':'dim', 'aug':'aug', '7':'dom7', 'm7':'min7', 'maj7':'maj7' }
+
   return (
-    <div style={{overflowX:'auto'}}>
+    <div>
+      {/* Legend row */}
+      <div style={{display:'flex',alignItems:'center',gap:'1rem',marginBottom:'1rem',flexWrap:'wrap'}}>
+        {[{label:'Root note',shape:'ellipse'},{label:'3rd',shape:'circle'},{label:'5th',shape:'dot'}].map(({label,shape})=>(
+          <div key={label} style={{display:'flex',alignItems:'center',gap:'.32rem'}}>
+            <svg width={16} height={16}>
+              {shape==='ellipse'&&<ellipse cx={8} cy={8} rx={5.5} ry={4} fill="var(--text)" transform="rotate(-12,8,8)"/>}
+              {shape==='circle'&&<circle cx={8} cy={8} r={3.5} fill="var(--accent)" opacity={.7}/>}
+              {shape==='dot'&&<circle cx={8} cy={8} r={2.5} fill="var(--accent)" opacity={.4}/>}
+            </svg>
+            <span style={{fontSize:'.64rem',color:'var(--text-3)'}}>{label}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{overflowX:'auto'}}>
       {progs.map((prog,vi)=>{
-        const chords=prog.split(' — ').filter(Boolean),col=COLORS[vi%COLORS.length]
-        const BAR_W=Math.max(60,Math.min(90,640/Math.max(chords.length,1)))
-        const SVG_W=44+chords.length*BAR_W+8,isP=vi===0
+        const chords=prog.split(' — ').filter(Boolean)
+        const col=COLORS[vi%COLORS.length]
+        const BAR_W=Math.max(68,Math.min(96,620/Math.max(chords.length,1)))
+        const SVG_W=48+chords.length*BAR_W+10
+        const isP=vi===0
         return (
-          <div key={vi} style={{marginBottom:'1.1rem'}}>
-            <div style={{display:'flex',alignItems:'center',gap:'.45rem',marginBottom:'.4rem'}}>
-              <div style={{width:9,height:9,borderRadius:'50%',background:col}}/>
-              <span style={{fontSize:'.7rem',fontWeight:700,color:col,textTransform:'uppercase',letterSpacing:'.06em'}}>Variation {vi+1}{vi===0?' — Primary':''}</span>
-              {isP&&player&&<button onClick={player.toggle} style={{marginLeft:'auto',padding:'.15rem .55rem',borderRadius:999,border:`1.5px solid ${col}`,background:`${col}12`,cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.68rem',color:col,transition:'all .18s'}}>{player.playing&&!player.paused?'⏸ Pause':'▶ Play'}</button>}
+          <div key={vi} style={{marginBottom:'1.4rem'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.45rem'}}>
+              <div style={{width:10,height:10,borderRadius:'50%',background:col,boxShadow:`0 0 8px ${col}88`}}/>
+              <span style={{fontSize:'.72rem',fontWeight:800,color:col,textTransform:'uppercase',letterSpacing:'.07em'}}>
+                Variation {vi+1}{vi===0?' — Primary':''}
+              </span>
+              {isP&&player&&(
+                <button onClick={player.toggle}
+                  style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'.3rem',padding:'.22rem .72rem',borderRadius:999,border:`1.5px solid ${col}`,background:`${col}18`,cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.72rem',color:col,transition:'all .2s'}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=`${col}30`}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=`${col}18`}}>
+                  {player.playing&&!player.paused
+                    ?<><svg width={10} height={10} viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>Pause</>
+                    :<><svg width={10} height={10} viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Play</>}
+                </button>
+              )}
             </div>
-            <svg width="100%" viewBox={`0 0 ${SVG_W} 130`} style={{display:'block',overflow:'visible'}}>
-              {[0,1,2,3,4].map(l=><line key={l} x1={0} y1={28+l*SP} x2={SVG_W} y2={28+l*SP} stroke="var(--border-hi)" strokeWidth={0.8}/>)}
-              <text x={4} y={62} fontSize={50} fontFamily="serif" fill="var(--text-2)" opacity={0.72}>𝄞</text>
-              <text x={38} y={40} fontSize={12} fontFamily="sans-serif" fontWeight="bold" fill="var(--text-2)" textAnchor="middle">4</text>
-              <text x={38} y={52} fontSize={12} fontFamily="sans-serif" fontWeight="bold" fill="var(--text-2)" textAnchor="middle">4</text>
+            <div style={{background:'var(--bg-1)',borderRadius:12,border:'1px solid var(--border)',padding:'.6rem .5rem .5rem',overflowX:'auto'}}>
+            <svg width="100%" viewBox={`0 0 ${SVG_W} ${SVG_H}`} style={{display:'block',overflow:'visible',minWidth:Math.max(320,SVG_W)}}>
+              {/* Shaded beat groups */}
+              {chords.map((_,ci)=>ci%8<4&&<rect key={ci} x={48+ci*BAR_W} y={STAFF_TOP-4} width={BAR_W} height={STAFF_H+8} fill="rgba(255,255,255,.022)" rx={2}/>)}
+
+              {/* Staff lines — bolder outer, lighter inner */}
+              {[0,1,2,3,4].map(l=>(
+                <line key={l} x1={0} y1={STAFF_TOP+l*SP} x2={SVG_W} y2={STAFF_TOP+l*SP}
+                  stroke="var(--border-hi)" strokeWidth={l===0||l===4?1.2:0.7} opacity={l===0||l===4?.85:.65}/>
+              ))}
+
+              {/* Treble clef */}
+              <text x={6} y={STAFF_TOP+3.8*SP} fontSize={STAFF_H+8} fontFamily="serif"
+                fill="var(--text-2)" opacity={0.78}>𝄞</text>
+
+              {/* Time signature */}
+              <text x={42} y={STAFF_TOP+1.5*SP} fontSize={SP*1.35} fontFamily="sans-serif"
+                fontWeight="900" fill="var(--text-2)" textAnchor="middle">4</text>
+              <text x={42} y={STAFF_TOP+3.5*SP} fontSize={SP*1.35} fontFamily="sans-serif"
+                fontWeight="900" fill="var(--text-2)" textAnchor="middle">4</text>
+
               {chords.map((chord,ci)=>{
-                const barX=44+ci*BAR_W,beatX=barX+BAR_W/2,isAct=isP&&player&&player.curIdx===ci&&(player.playing||player.paused)
-                const rn=chord.replace(/m$|dim$|aug$/,'').replace(/[^A-G]/g,''),nPos=NOTE_POS[rn]??2
-                const noteY=28+4*SP-nPos*(SP/2),stemUp=nPos<4,isMin=chord.endsWith('m')&&!chord.endsWith('dim'),thiCol=isAct?'var(--accent)':col
+                const barX  = 48+ci*BAR_W
+                const beatX = barX+BAR_W/2
+                const isAct = isP&&player&&player.curIdx===ci&&(player.playing||player.paused)
+                const rn    = chord.replace(/m$|dim$|aug$/,'').replace(/maj7|7$/,'').replace(/[^A-G]/g,'')
+                const nPos  = NOTE_POS[rn]??2
+                const noteY = STAFF_TOP+STAFF_H - nPos*(SP/2)
+                const stemUp= nPos < 4
+                const isMin = chord.endsWith('m')&&!chord.endsWith('dim')&&!chord.endsWith('maj7')
+                const isDim = chord.endsWith('dim')
+                const thiCol= isAct ? col : col
+                const textY = STAFF_TOP + STAFF_H + BOX_H + 2
+
+                // Ledger lines above/below staff
+                const ledgerAbove = noteY < STAFF_TOP - 1
+                const ledgerBelow = noteY > STAFF_TOP + STAFF_H + 1
+
                 return (
                   <g key={ci}>
-                    {isAct&&<rect x={barX} y={24} width={BAR_W} height={4*SP+14} fill={`${col}15`} rx={4}/>}
-                    {ci>0&&<line x1={barX} y1={28} x2={barX} y2={28+4*SP} stroke="var(--border)" strokeWidth={ci%4===0?1.1:0.5}/>}
-                    {scale[ci]&&<text x={beatX} y={22} fontSize={8} fontFamily="serif" fontStyle="italic" fill="var(--text-3)" textAnchor="middle">{scale[ci].roman}</text>}
-                    <text x={beatX} y={14} fontSize={11} fontFamily="'Playfair Display',serif" fontWeight="bold" fill={thiCol} textAnchor="middle">{chord}</text>
-                    {noteY>28+4*SP+2&&<line x1={beatX-8} y1={28+5*SP} x2={beatX+8} y2={28+5*SP} stroke="var(--text-2)" strokeWidth={0.7}/>}
-                    <ellipse cx={beatX} cy={noteY} rx={5} ry={3.8} fill={isAct?'var(--accent)':'var(--text)'} transform={`rotate(-12,${beatX},${noteY})`}/>
-                    <circle cx={beatX+2} cy={noteY-(isMin?3:4)*(SP/2)} r={3.2} fill={col} opacity={isAct?.65:.42}/>
-                    <circle cx={beatX} cy={noteY-3.5*(SP/2)} r={2.5} fill={col} opacity={isAct?.5:.28}/>
-                    {stemUp?<line x1={beatX+5} y1={noteY} x2={beatX+5} y2={noteY-26} stroke={isAct?'var(--accent)':'var(--text)'} strokeWidth={1.3}/>:<line x1={beatX-5} y1={noteY} x2={beatX-5} y2={noteY+26} stroke={isAct?'var(--accent)':'var(--text)'} strokeWidth={1.3}/>}
-                    {[1,2,3].map(b=><circle key={b} cx={barX+b*BAR_W/4} cy={28+4*SP+8} r={1.8} fill="var(--border-hi)"/>)}
-                    <rect x={barX+2} y={28+4*SP+14} width={BAR_W-4} height={22} rx={4} fill={`${col}12`} stroke={isAct?col:'var(--border)'} strokeWidth={isAct?1.2:.6}/>
-                    <rect x={barX+2} y={28+4*SP+14} width={BAR_W-4} height={3} rx={2} fill={col} opacity={isAct?1:.7}/>
-                    <text x={beatX} y={28+4*SP+28} fontSize={chord.length>3?9:11} fontFamily="'Playfair Display',serif" fontWeight="bold" fill={thiCol} textAnchor="middle">{chord}</text>
+                    {/* Active highlight */}
+                    {isAct&&<rect x={barX} y={STAFF_TOP-8} width={BAR_W} height={STAFF_H+BOX_H+16} fill={`${col}18`} rx={5}/>}
+
+                    {/* Bar line */}
+                    {ci>0&&<line x1={barX} y1={STAFF_TOP} x2={barX} y2={STAFF_TOP+STAFF_H}
+                      stroke="var(--border)" strokeWidth={ci%4===0?1.5:0.6} opacity={ci%4===0?.9:.5}/>}
+
+                    {/* Double bar at every 4 */}
+                    {ci%4===0&&ci>0&&<line x1={barX+2.5} y1={STAFF_TOP} x2={barX+2.5} y2={STAFF_TOP+STAFF_H}
+                      stroke="var(--border)" strokeWidth={0.5} opacity={0.4}/>}
+
+                    {/* Roman numeral */}
+                    {scale[ci]&&(
+                      <text x={beatX} y={STAFF_TOP-11} fontSize={8} fontFamily="serif" fontStyle="italic"
+                        fill={isAct?col:"var(--text-3)"} textAnchor="middle" opacity={isAct?1:.8}>
+                        {scale[ci].roman}
+                      </text>
+                    )}
+
+                    {/* Chord name above roman numeral */}
+                    <text x={beatX} y={STAFF_TOP-21} fontSize={chord.length>4?9.5:11.5}
+                      fontFamily="'Georgia',serif" fontWeight="bold"
+                      fill={isAct?col:col} textAnchor="middle" opacity={isAct?1:.75}>
+                      {chord}
+                    </text>
+
+                    {/* Ledger lines */}
+                    {ledgerAbove&&Array.from({length:Math.ceil((STAFF_TOP-noteY)/SP)},(_,i)=>(
+                      <line key={i} x1={beatX-8} y1={STAFF_TOP-(i+1)*SP} x2={beatX+8} y2={STAFF_TOP-(i+1)*SP}
+                        stroke="var(--text-2)" strokeWidth={0.8}/>
+                    ))}
+                    {ledgerBelow&&Array.from({length:Math.ceil((noteY-STAFF_TOP-STAFF_H)/SP)},(_,i)=>(
+                      <line key={i} x1={beatX-8} y1={STAFF_TOP+STAFF_H+(i+1)*SP} x2={beatX+8} y2={STAFF_TOP+STAFF_H+(i+1)*SP}
+                        stroke="var(--text-2)" strokeWidth={0.8}/>
+                    ))}
+
+                    {/* Accidental dot for sharp chords */}
+                    {rn!==chord.replace(/[^A-G#]/g,'').slice(0,2)&&rn.includes('#')&&(
+                      <text x={beatX-7} y={noteY+3} fontSize={9} fill="var(--text)" opacity={.8}>#</text>
+                    )}
+
+                    {/* Note head (root) — filled oval */}
+                    <ellipse cx={beatX} cy={noteY} rx={5.5} ry={4.2}
+                      fill={isAct?col:"var(--text)"} opacity={isAct?.95:.88}
+                      transform={`rotate(-12,${beatX},${noteY})`}/>
+
+                    {/* 3rd interval dot */}
+                    <circle cx={beatX+1.5} cy={noteY-(isMin?3:4)*(SP/2)} r={3.8}
+                      fill={col} opacity={isAct?.7:.45}/>
+
+                    {/* 5th interval dot */}
+                    <circle cx={beatX-1} cy={noteY-(isDim?4.5:3.5)*(SP/2)} r={2.8}
+                      fill={col} opacity={isAct?.5:.28}/>
+
+                    {/* Stem */}
+                    {stemUp
+                      ?<line x1={beatX+5.5} y1={noteY-1} x2={beatX+5.5} y2={noteY-SP*3}
+                          stroke={isAct?col:"var(--text)"} strokeWidth={1.5} opacity={isAct?.9:.75}/>
+                      :<line x1={beatX-5.5} y1={noteY+1} x2={beatX-5.5} y2={noteY+SP*3}
+                          stroke={isAct?col:"var(--text)"} strokeWidth={1.5} opacity={isAct?.9:.75}/>}
+
+                    {/* Beat tick marks */}
+                    {[1,2,3].map(b=>(
+                      <line key={b} x1={barX+b*BAR_W/4} y1={STAFF_TOP+STAFF_H+4}
+                        x2={barX+b*BAR_W/4} y2={STAFF_TOP+STAFF_H+8}
+                        stroke="var(--border-hi)" strokeWidth={b===2?1.2:0.7}/>
+                    ))}
+
+                    {/* Chord label box */}
+                    <rect x={barX+2} y={STAFF_TOP+STAFF_H+10} width={BAR_W-4} height={BOX_H-2}
+                      rx={5} fill={isAct?`${col}22`:`${col}0e`}
+                      stroke={isAct?col:"var(--border)"} strokeWidth={isAct?1.4:.7}/>
+                    <rect x={barX+2} y={STAFF_TOP+STAFF_H+10} width={BAR_W-4} height={3}
+                      rx={2} fill={col} opacity={isAct?.9:.55}/>
+                    <text x={beatX} y={STAFF_TOP+STAFF_H+24}
+                      fontSize={chord.length>4?8.5:11} fontFamily="'Georgia',serif" fontWeight="bold"
+                      fill={isAct?col:col} textAnchor="middle" opacity={isAct?1:.75}>
+                      {chord}
+                    </text>
                   </g>
                 )
               })}
-              <line x1={44+chords.length*BAR_W} y1={28} x2={44+chords.length*BAR_W} y2={28+4*SP} stroke="var(--text)" strokeWidth={0.8}/>
-              <line x1={44+chords.length*BAR_W+2} y1={28} x2={44+chords.length*BAR_W+2} y2={28+4*SP} stroke="var(--text)" strokeWidth={2.2}/>
+
+              {/* Final double bar */}
+              <line x1={48+chords.length*BAR_W}   y1={STAFF_TOP} x2={48+chords.length*BAR_W}   y2={STAFF_TOP+STAFF_H} stroke="var(--text)" strokeWidth={1} opacity={.75}/>
+              <line x1={48+chords.length*BAR_W+3} y1={STAFF_TOP} x2={48+chords.length*BAR_W+3} y2={STAFF_TOP+STAFF_H} stroke="var(--text)" strokeWidth={3} opacity={.75}/>
             </svg>
+            </div>
           </div>
         )
       })}
@@ -850,7 +983,7 @@ export default function Generate() {
     pollRef.current = setInterval(async () => {
       try {
         const r = await fetch(`${API}/api/jobs/${jobId}`)
-        const d = await r.json()
+        const d = await safeJson(r)
         setJobStatus(d.status)
         if (d.status === 'finished') { clearInterval(pollRef.current); setLoading(false); applyResult(d.result) }
         else if (d.status === 'failed') { clearInterval(pollRef.current); setLoading(false); setError(d.error || 'Generation failed') }
@@ -895,7 +1028,13 @@ export default function Generate() {
       setJobStatus(data.status)
       if (data.mode==='sync'&&data.result) { setLoading(false); applyResult(data.result); return }
       pollJob(data.job_id)
-    } catch(e) { setLoading(false); setError(`Showing local preview — backend: ${e.message}`) }
+    } catch(e) {
+      setLoading(false)
+      const friendly = e.message?.includes('fetch') || e.message?.includes('Failed')
+        ? 'Server unreachable — showing instant local preview instead.'
+        : `Showing local preview — ${e.message}`
+      setError(friendly)
+    }
   }
 
   const handleSave = useCallback(() => {
