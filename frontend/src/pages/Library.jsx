@@ -954,10 +954,7 @@ export default function Library() {
         {/* Sidebar nav */}
         <nav style={{ background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:18,padding:'.45rem',position:'sticky',top:80,boxShadow:'var(--shadow-card)' }}>
           {NAV.map(item => (
-            <button key={item.key} className="nav-item-anim" onClick={()=>{setActiveSection(item.key);setSearch('');setOpenPlaylist(null)}}
-              style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:'.45rem',padding:'.52rem .8rem',borderRadius:12,fontFamily:'inherit',fontSize:'.82rem',fontWeight:600,width:'100%',textAlign:'left',border:'none',cursor:'pointer',transition:'all .2s cubic-bezier(.34,1.2,.64,1)',background:activeSection===item.key?'linear-gradient(135deg,rgba(255,107,71,.14),rgba(255,179,71,.09))':'transparent',color:activeSection===item.key?'var(--accent)':'var(--text-2)',transform:activeSection===item.key?'translateX(3px)':'none' }}
-              onMouseEnter={e=>{ if(activeSection!==item.key) e.currentTarget.style.background='var(--bg-2)' }}
-              onMouseLeave={e=>{ if(activeSection!==item.key) e.currentTarget.style.background='transparent' }}>
+            <button key={item.key} className={`nav-item-anim lib-nav-item${activeSection===item.key?' active':''}`} onClick={()=>{setActiveSection(item.key);setSearch('');setOpenPlaylist(null)}}>
               <span style={{ display:'flex',alignItems:'center',gap:'.45rem' }}>
                 <span style={{ fontSize:'.92rem',display:'inline-block',transition:'transform .25s' }} className={activeSection===item.key?'lib-header-icon':''}>{item.icon}</span>{item.label}
               </span>

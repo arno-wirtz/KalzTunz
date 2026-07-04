@@ -67,6 +67,7 @@ function StrengthMeter({ password }) {
         </div>
       </div>
     </div>
+  </div>
   )
 }
 

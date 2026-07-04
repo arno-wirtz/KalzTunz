@@ -791,7 +791,7 @@ export default function Search() {
       {!query && (
         <div style={{ marginBottom:'1.4rem' }}>
           <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.6rem' }}>
-            <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.06em' }}>🎵 Browse by Genre</div>
+            <div style={{ fontSize:'.7rem',fontWeight:700,color:'#60a5fa',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.4rem' }}><span style={{width:6,height:6,borderRadius:'50%',background:'#3b82f6',display:'inline-block'}}/>Browse by Genre</div>
             <div style={{ position:'relative' }}>
               <button onClick={()=>setShowMoreGenres(o=>!o)}
                 style={{ display:'flex',alignItems:'center',gap:'.3rem',padding:'.24rem .65rem',borderRadius:999,border:'1px solid var(--border-hi)',background:'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.71rem',color:'var(--text-2)',transition:'all .18s' }}
@@ -833,7 +833,7 @@ export default function Search() {
       {/* ── Mood strip ── */}
       <div style={{ marginBottom:'1.25rem' }}>
         <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.5rem' }}>
-          <div style={{ fontSize:'.7rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.06em' }}>🎭 Browse by Mood</div>
+          <div style={{ fontSize:'.7rem',fontWeight:700,color:'#60a5fa',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.4rem' }}><span style={{width:6,height:6,borderRadius:'50%',background:'#3b82f6',display:'inline-block'}}/>Browse by Mood</div>
           <div style={{ position:'relative' }}>
             <button onClick={()=>setShowMoreMoods(o=>!o)}
               style={{ display:'flex',alignItems:'center',gap:'.3rem',padding:'.24rem .65rem',borderRadius:999,border:'1px solid var(--border-hi)',background:'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.71rem',color:'var(--text-2)',transition:'all .18s' }}

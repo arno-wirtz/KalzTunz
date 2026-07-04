@@ -200,7 +200,7 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="auth-switch-box">
+          <div className="auth-switch-box" style={{textAlign:"center",marginTop:"1.25rem",fontSize:".84rem",color:"var(--text-3)"}}>
             <p>New to KalzTunz?</p>
             <Link to="/register" className="btn btn--secondary" style={{justifyContent:'center'}}>
               Create a free account

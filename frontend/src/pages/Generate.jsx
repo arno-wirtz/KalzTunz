@@ -682,7 +682,7 @@ function SheetMusicView({result,player}) {
         return (
           <div key={vi} style={{marginBottom:'1.4rem'}}>
             <div style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.45rem'}}>
-              <div style={{width:10,height:10,borderRadius:'50%',background:col,boxShadow:`0 0 8px ${col}88`}}/>
+              <span style={{display:'inline-block',width:10,height:10,borderRadius:'50%',flexShrink:0,background:col,boxShadow:`0 0 8px ${col}88`}}/>
               <span style={{fontSize:'.72rem',fontWeight:800,color:col,textTransform:'uppercase',letterSpacing:'.07em'}}>
                 Variation {vi+1}{vi===0?' — Primary':''}
               </span>
@@ -828,6 +828,7 @@ function SheetMusicView({result,player}) {
           </div>
         )
       })}
+      </div>  {/* close overflowX:auto scroll container */}
       {scale.length>0&&(
         <div style={{marginTop:'.75rem',borderTop:'1px solid var(--border)',paddingTop:'.75rem'}}>
           <div style={{fontSize:'.68rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.5rem'}}>Scale: {result.key} {result.mode}</div>
