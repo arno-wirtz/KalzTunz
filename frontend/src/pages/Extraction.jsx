@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { useAuth } from '../App'
+import { safeJson, useAuth } from '../App'
+
 import { ChordSynth, fmtDur, saveExtractionToLib } from '../utils/musicEngine'
-import { safeJson } from '../App'
 
 const API      = import.meta.env.VITE_API_URL || ''
 const POLL_MS  = 2000

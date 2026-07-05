@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { safeJson, useAuth } from '../App'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../App'
+
 import { ChordSynth, buildLocal, buildScaleRef, fmtDur, KEY_FREQS, chordFreqs, saveGenerationToLib } from '../utils/musicEngine'
-import { safeJson } from '../App'
 
 const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
 
@@ -82,7 +82,6 @@ const VOICE_TYPES = [
 // imported from musicEngine.js
 
 // imported from musicEngine.js
-
 
 /* ═══════════════════════════════════════════════════════════════
    PROFESSIONAL SHEET MUSIC PDF GENERATOR
@@ -964,7 +963,6 @@ export default function Generate() {
   const [showShare,  setShowShare] = useState(false)
   const [saveMsg,    setSaveMsg]   = useState(null)
   const player = useChordPlayer()
-
 
   const pollRef = useRef(null)
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])

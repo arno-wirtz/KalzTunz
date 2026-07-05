@@ -1,7 +1,6 @@
-import { useState, useEffect, useContext, createContext, useCallback, useRef } from 'react'
+import { useState, useEffect, useContext, createContext, useCallback, useRef, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { ThemeProvider, useTheme } from './ThemeContext'
-import { lazy, Suspense } from 'react'
 const Home        = lazy(() => import('./pages/Home'))
 const Generate    = lazy(() => import('./pages/Generate'))
 const Extraction  = lazy(() => import('./pages/Extraction'))
@@ -11,7 +10,7 @@ const Settings    = lazy(() => import('./pages/Settings'))
 const Login       = lazy(() => import('./pages/Login'))
 const Register    = lazy(() => import('./pages/Register'))
 const AuthCallback= lazy(() => import('./pages/AuthCallback'))
-import Tutorial, { useTutorial } from './pages/Tutorial'  // keep eager — tiny + used in header
+import Tutorial, { useTutorial } from './pages/Tutorial'
 import './App.css'
 
 // ==================== AUTH CONTEXT ====================
