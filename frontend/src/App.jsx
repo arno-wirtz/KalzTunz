@@ -1,6 +1,10 @@
 import { useState, useEffect, useContext, createContext, useCallback, useRef, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { ThemeProvider, useTheme } from './ThemeContext'
+import Tutorial, { useTutorial } from './pages/Tutorial'
+import './App.css'
+
+// Lazy-loaded pages — each loads only when first navigated to
 const Home        = lazy(() => import('./pages/Home'))
 const Generate    = lazy(() => import('./pages/Generate'))
 const Extraction  = lazy(() => import('./pages/Extraction'))
@@ -10,8 +14,6 @@ const Settings    = lazy(() => import('./pages/Settings'))
 const Login       = lazy(() => import('./pages/Login'))
 const Register    = lazy(() => import('./pages/Register'))
 const AuthCallback= lazy(() => import('./pages/AuthCallback'))
-import Tutorial, { useTutorial } from './pages/Tutorial'
-import './App.css'
 
 // ==================== AUTH CONTEXT ====================
 
