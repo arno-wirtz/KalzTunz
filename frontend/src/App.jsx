@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation, Navigate 
 import { ThemeProvider, useTheme } from './ThemeContext'
 import Tutorial, { useTutorial } from './pages/Tutorial'
 import './App.css'
+import './theme-spec.css'
 
 // Lazy-loaded pages — each loads only when first navigated to
 const Home        = lazy(() => import('./pages/Home'))
