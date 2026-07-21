@@ -18,7 +18,10 @@ export default defineConfig({
     outDir: '../dist',
     emptyOutDir: true,
     sourcemap: false,
-    minify: 'esbuild',
+    // Fixed: Vite 8's rolldown bundler no longer bundles esbuild itself.
+    // Explicitly requesting minify:'esbuild' now requires esbuild as a
+    // standalone dependency, which isn't installed in this project.
+    // Omit the option (or set 'oxc') to use rolldown's built-in minifier.
     cssCodeSplit: true,
     rollupOptions: {
       output: {
