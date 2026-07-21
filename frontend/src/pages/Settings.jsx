@@ -69,8 +69,6 @@ function AvatarModal({ currentSrc, onSave, onClose }) {
     if (!preview || preview === currentSrc) { onClose(); return }
     setSaving(true)
     try {
-      // In production: POST to /api/auth/avatar with FormData
-      // Here we persist to localStorage via updateUser
       const token = localStorage.getItem('kalztunz_token')
       if (token) {
         const res = await fetch(`${API}/api/auth/avatar`, {
@@ -95,11 +93,11 @@ function AvatarModal({ currentSrc, onSave, onClose }) {
       onClick={onClose}
     >
       <div
-        style={{ background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:18,padding:'1.75rem',width:'100%',maxWidth:460,boxShadow:'var(--shadow)',animation:'authSlideIn .22s ease' }}
+        style={{ background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:16,padding:'1.75rem',width:'100%',maxWidth:460,boxShadow:'var(--shadow)',animation:'authSlideIn .22s ease' }}
         onClick={e => e.stopPropagation()}
       >
         <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.25rem' }}>
-          <h2 style={{ fontSize:'1.05rem',fontWeight:800 }}>Change Profile Photo</h2>
+          <h2 style={{ fontSize:'1.05rem',fontWeight:700 }}>Change Profile Photo</h2>
           <button onClick={onClose} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',fontSize:'1.1rem',lineHeight:1 }}>✕</button>
         </div>
 
@@ -123,7 +121,7 @@ function AvatarModal({ currentSrc, onSave, onClose }) {
           {[['local','💻 From Device'],['url','🔗 Image URL'],['google','📸 Google Photos']].map(([k,l]) => (
             <button key={k} onClick={() => { setTab(k); setError(null) }} style={{
               flex:1,padding:'.35rem .5rem',borderRadius:8,border:'none',cursor:'pointer',
-              fontFamily:'inherit',fontWeight:700,fontSize:'.74rem',transition:'all .18s',
+              fontFamily:'inherit',fontWeight:700,fontSize:'.74rem',transition:'all .18s ease',
               background: tab === k ? 'var(--accent)' : 'transparent',
               color: tab === k ? '#fff' : 'var(--text-2)',
             }}>{l}</button>
@@ -189,7 +187,7 @@ function AvatarModal({ currentSrc, onSave, onClose }) {
             <button className="btn btn--secondary btn--sm" style={{ marginTop:'.5rem' }} onClick={handleUrl}>
               Preview →
             </button>
-            <div style={{ marginTop:'.75rem',padding:'.6rem .8rem',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:8,fontSize:'.72rem',color:'var(--accent-warn)' }}>
+            <div style={{ marginTop:'.75rem',padding:'.6rem .8rem',background:'rgba(251,191,36,.08)',border:'1px solid rgba(251,191,36,.2)',borderRadius:8,fontSize:'.72rem',color:'var(--accent-warn)' }}>
               ⚠ Google Photos requires the link to be set to "Anyone with the link can view"
             </div>
           </div>
@@ -208,7 +206,6 @@ function AvatarModal({ currentSrc, onSave, onClose }) {
   )
 }
 
-/* ── Account Panel ──────────────────────────────────── */
 /* ── Password Change Section ──────────────────────────────── */
 function PasswordChangeSection() {
   const [cur,     setCur]     = useState('')
@@ -283,7 +280,7 @@ function AccountPanel() {
   const [showAvatar, setShowAvatar] = useState(false)
 
   const avatarSrc = user?.profile_pic
-    || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user?.username || 'U')}&backgroundColor=0d1a2e&textColor=3d9bff`
+    || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user?.username || 'U')}&backgroundColor=0f172a&textColor=38bdf8`
 
   const handleSave = async () => {
     setSaving(true); setMsg(null)
@@ -316,7 +313,6 @@ function AccountPanel() {
     <div className="settings-panel">
       <Section title="Profile Photo">
         <div style={{ display:'flex',alignItems:'center',gap:'1.25rem',padding:'.25rem 0' }}>
-          {/* Clickable avatar with hover overlay */}
           <div
             className="avatar-upload-wrap"
             onClick={() => setShowAvatar(true)}
@@ -424,16 +420,19 @@ function AccountPanel() {
 }
 
 /* ── Appearance Panel ───────────────────────────────── */
+/* Palette picker removed — the app now uses a single unified accent
+   (light blue #38BDF8 / red #EF4444 / green #4ADE80) per the design
+   spec, so the only user-facing choice is Light / Dark / System. */
 function AppearancePanel() {
-  const { theme, palette, setTheme, setPalette, COLOR_PALETTES } = useTheme()
+  const { theme, setTheme } = useTheme()
 
   const MODES = [
     { key:'dark',   label:'Dark',   icon:'🌙',
-      preview: <div style={{ height:44,borderRadius:8,background:'linear-gradient(135deg,#0a0b0f,#1f2330)',border:'1px solid #2e3650',display:'flex',alignItems:'flex-end',padding:'4px 6px',gap:3 }}><div style={{ width:16,height:8,background:'var(--coral)',borderRadius:2 }}/><div style={{ width:24,height:6,background:'#232836',borderRadius:2 }}/></div> },
+      preview: <div style={{ height:44,borderRadius:8,background:'#0F172A',border:'1px solid #374151',display:'flex',alignItems:'flex-end',padding:'4px 6px',gap:3 }}><div style={{ width:16,height:8,background:'#38BDF8',borderRadius:2 }}/><div style={{ width:24,height:6,background:'#1E293B',borderRadius:2 }}/></div> },
     { key:'light',  label:'Light',  icon:'☀️',
-      preview: <div style={{ height:44,borderRadius:8,background:'linear-gradient(135deg,#faf8f4,#ede9e0)',border:'1px solid #e0d9ce',display:'flex',alignItems:'flex-end',padding:'4px 6px',gap:3 }}><div style={{ width:16,height:8,background:'var(--coral)',borderRadius:2 }}/><div style={{ width:24,height:6,background:'#e0d9ce',borderRadius:2 }}/></div> },
+      preview: <div style={{ height:44,borderRadius:8,background:'#F8FAFC',border:'1px solid #E5E7EB',display:'flex',alignItems:'flex-end',padding:'4px 6px',gap:3 }}><div style={{ width:16,height:8,background:'#0284C7',borderRadius:2 }}/><div style={{ width:24,height:6,background:'#E5E7EB',borderRadius:2 }}/></div> },
     { key:'system', label:'System', icon:'💻',
-      preview: <div style={{ height:44,borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',display:'flex' }}><div style={{ flex:1,background:'linear-gradient(135deg,#0a0b0f,#1f2330)' }}/><div style={{ flex:1,background:'linear-gradient(135deg,#faf8f4,#ede9e0)' }}/></div> },
+      preview: <div style={{ height:44,borderRadius:8,overflow:'hidden',border:'1px solid var(--border)',display:'flex' }}><div style={{ flex:1,background:'#0F172A' }}/><div style={{ flex:1,background:'#F8FAFC' }}/></div> },
   ]
 
   return (
@@ -447,35 +446,9 @@ function AppearancePanel() {
             </div>
           ))}
         </div>
-      </Section>
-
-      <Section title="Color Palette">
-        <p style={{ fontSize:'.82rem',color:'var(--text-2)',marginBottom:'1rem',lineHeight:1.6 }}>
-          Choose an accent palette. This changes the primary colour throughout the entire app — buttons, highlights, badges, and active states.
+        <p style={{ fontSize:'.78rem', color:'var(--text-3)', marginTop:'.85rem', lineHeight:1.6 }}>
+          KalzTunz uses a single accent palette — light blue for actions, red for warnings, green for success — tuned separately for readability in both light and dark mode.
         </p>
-        <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.75rem' }}>
-          {Object.entries(COLOR_PALETTES).map(([id, p]) => {
-            const colors = p[theme === 'light' ? 'light' : 'dark']
-            const isActive = palette === id
-            return (
-              <button key={id} onClick={() => setPalette(id)}
-                style={{ padding:'.85rem .7rem',borderRadius:14,border:`2px solid ${isActive ? colors.accent : 'var(--border)'}`,background:isActive ? `${colors.accent}12` : 'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',transition:'all .2s',textAlign:'center' }}
-                onMouseEnter={e=>{if(!isActive){e.currentTarget.style.borderColor=colors.accent;e.currentTarget.style.transform='translateY(-2px)'}}}
-                onMouseLeave={e=>{if(!isActive){e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='none'}}}>
-                {/* Preview swatches */}
-                <div style={{ display:'flex',gap:4,justifyContent:'center',marginBottom:'.5rem' }}>
-                  {[colors.accent,colors.accent2,colors.accent3].map((c,i) => (
-                    <div key={i} style={{ width:18,height:18,borderRadius:'50%',background:c,boxShadow:`0 2px 8px ${c}66` }}/>
-                  ))}
-                </div>
-                <div style={{ fontSize:'.75rem',fontWeight:700,color:isActive?colors.accent:'var(--text-2)' }}>
-                  {p.icon} {p.label}
-                </div>
-                {isActive && <div style={{ fontSize:'.62rem',color:colors.accent,marginTop:'.15rem',fontWeight:700 }}>Active ✓</div>}
-              </button>
-            )
-          })}
-        </div>
       </Section>
 
       <Section title="Display">
