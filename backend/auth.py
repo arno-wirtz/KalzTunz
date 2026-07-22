@@ -6,6 +6,7 @@ Supports: JWT (username/email + password), Google OAuth2, GitHub OAuth2
 
 import logging
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -362,6 +363,15 @@ async def change_password(
             raise HTTPException(status_code=422, detail="Both current and new password are required")
         if len(new_password) < 8:
             raise HTTPException(status_code=422, detail="New password must be at least 8 characters")
+        # FIXED: OAuth-only accounts (Google/GitHub) have hashed_password = None.
+        # passlib's verify() raises on a None hash instead of returning False,
+        # so this used to 500 instead of giving a clean, actionable error.
+        if not current_user.hashed_password:
+            raise HTTPException(
+                status_code=400,
+                detail="This account signed up via OAuth and has no password set. "
+                       "There is no current password to change.",
+            )
         # Verify current password
         from backend.security_utils import verify_password, hash_password
         if not verify_password(current_password, current_user.hashed_password):
@@ -581,4 +591,3 @@ async def logout(current_user: User = Depends(get_current_user)):
     # Stateless JWT — real revocation needs a Redis blocklist (jti-based)
     logger.info("User logged out: id=%s", current_user.id)
     return {"ok": True, "message": "Logged out successfully"}
-

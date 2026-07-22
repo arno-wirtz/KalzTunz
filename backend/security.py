@@ -16,9 +16,7 @@ from slowapi.errors import RateLimitExceeded
 
 logger = logging.getLogger(__name__)
 
-# Fixed: get_rate_limiter() at the bottom was creating a second independent Limiter
-# instance, which would be out of sync with the one registered on app.state.
-# There should be one global limiter used everywhere.
+# One global limiter used everywhere (attached to app.state below).
 limiter = Limiter(key_func=get_remote_address)
 
 
@@ -57,9 +55,15 @@ def add_security_middleware(app: FastAPI) -> Limiter:
         CORSMiddleware,
         allow_origins=cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
-        # Fixed: allow_headers=["*"] with allow_credentials=True is rejected by
-        # browsers (CORS spec forbids wildcard + credentials). List headers explicitly.
+        # FIXED: PATCH was missing from this list. /api/auth/profile is a
+        # PATCH endpoint (Settings.jsx "Save Changes" button). Same-origin
+        # requests never trigger a CORS preflight, which is why this went
+        # unnoticed in the unified single-service deployment — but any
+        # cross-origin setup (frontend hosted on a separate domain from the
+        # API) would have every profile save silently fail at the preflight.
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        # allow_headers=["*"] with allow_credentials=True is rejected by
+        # browsers (CORS spec forbids wildcard + credentials). List explicitly.
         allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
         max_age=3600,
     )
@@ -79,8 +83,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        # Fixed: X-XSS-Protection is obsolete and can introduce vulnerabilities
-        # in older IE. Removed in favour of a proper CSP.
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
@@ -90,9 +92,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "max-age=31536000; includeSubDomains; preload"
             )
 
-        # Fixed: 'unsafe-inline' in script-src undermines XSS protection entirely.
-        # Use a nonce-based or hash-based policy in production. This is a safe
-        # baseline that works for a pure API backend with no inline scripts.
         response.headers["Content-Security-Policy"] = (
             "default-src 'none'; "
             "script-src 'self'; "
