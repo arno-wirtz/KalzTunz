@@ -34,7 +34,7 @@ load_dotenv()
 # ==================== LOGGING (must be first) ====================
 
 try:
-    import backend.logging_config  # noqa: F401 — side-effect import
+    import backend.logging_config  # noqa: F401 — imported for side effects
 except Exception:
     logging.basicConfig(
         level=logging.INFO,
@@ -135,7 +135,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="KalzTunz API",
     description="AI-powered music creation and chord extraction platform.",
-    version="2.1.0",
+    version="2.1.1",
     contact={"name": "KalzTunz", "url": "https://kalztunz.com"},
     docs_url    =None if ENVIRONMENT == "production" else "/docs",
     redoc_url   =None if ENVIRONMENT == "production" else "/redoc",
@@ -156,7 +156,7 @@ else:
         CORSMiddleware,
         allow_origins=_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "Accept", "X-Request-ID"],
     )
     _hosts = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
@@ -206,6 +206,7 @@ try:
     app.include_router(spotify_router)
 except Exception as exc:
     logger.warning("Spotify router not available: %s", exc)
+
 # ==================== DEPENDENCIES ====================
 
 def require_queue() -> Optional[Queue]:
@@ -216,6 +217,23 @@ def require_queue() -> Optional[Queue]:
 def require_redis() -> redis.Redis:
     if not redis_conn:
         raise HTTPException(status_code=503, detail="Redis is unavailable.")
+    return redis_conn
+
+
+def get_redis_conn() -> Optional[redis.Redis]:
+    """
+    Optional Redis dependency for endpoints that must keep working even when
+    Redis is down (e.g. job-status polling — sync-mode jobs are served out
+    of the in-memory _sync_job_store instead).
+
+    FIXED: this function was referenced by get_job_status() via
+    Depends(get_redis_conn) but was never defined anywhere in the module.
+    Depends() resolves its argument at import time, so the missing name
+    raised a NameError the instant this file was imported — meaning the
+    FastAPI app never finished starting, regardless of the request path.
+    That's why extraction/generation (and everything else routed through
+    this app) appeared broken: the process never came up in the first place.
+    """
     return redis_conn
 
 
@@ -287,7 +305,6 @@ async def upload_async(
 ):
     _validate_upload(file)
 
-    # Fixed: was broken tuple assignment — compute ext and name separately
     ext        = Path(file.filename or "upload").suffix.lower() or ".wav"
     saved_name = f"{uuid.uuid4().hex}{ext}"
     dest_path  = UPLOAD_DIR / saved_name
@@ -348,6 +365,11 @@ async def generate_chords(
             instruments_list = []
     except (json.JSONDecodeError, ValueError):
         instruments_list = []
+
+    # Strip any "voice:<type>" pseudo-instrument tags the frontend appends
+    # when vocals are selected — tasks.generate_chords only understands
+    # real instrument ids (piano/guitar/bass/drums/strings/vocals/synth/brass).
+    instruments_list = [i for i in instruments_list if not str(i).startswith("voice:")]
 
     params = dict(
         root_note=root_note,
@@ -646,7 +668,7 @@ def _fallback_html() -> str:
 </head>
 <body><div class="container">
     <h1>🎵 KalzTunz API</h1>
-    <p class="tagline">AI-powered music creation &amp; chord extraction — v2.1.0</p>
+    <p class="tagline">AI-powered music creation &amp; chord extraction — v2.1.1</p>
     <div class="grid">
         <div class="card"><h2>📚 Docs</h2><ul>
             <li><a href="/docs">Swagger UI</a><span class="badge">interactive</span></li>
