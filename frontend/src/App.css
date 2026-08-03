@@ -699,15 +699,33 @@ input[type=range] { width:100%;accent-color:var(--accent);cursor:pointer;height:
 .history-del-btn { opacity:0!important;transition:opacity .14s ease; }
 div:hover > .history-del-btn, div:hover .history-del-btn { opacity:1!important; }
 
-@media (max-width:900px) {
-  .page-wrap > div[style*="grid-template-columns: 340px"]  { grid-template-columns:1fr !important; }
-  .page-wrap > div[style*="grid-template-columns: 380px"]  { grid-template-columns:1fr !important; }
-  .page-wrap > div[style*="grid-template-columns: 1fr 400px"] { grid-template-columns:1fr !important; }
-  .page-wrap > div[style*="grid-template-columns: 1fr 400px"] > div:last-child { position:static !important; }
-  .page-wrap > div[style*="grid-template-columns: 310px"] { grid-template-columns: 1fr !important; }
+/* ═══════════════════════════════════════════════════════════════
+   RESPONSIVE SPLIT LAYOUTS
+   Robust replacement for the old `[style*="grid-template-columns: …"]`
+   substring-matching hack, which silently broke any time a page used a
+   sidebar width the selector didn't happen to contain verbatim (e.g.
+   Generate.jsx's "1fr 380px" vs a selector only written for "1fr 400px").
+   Pages set the sidebar width via the --split-w custom property instead
+   of hardcoding it into gridTemplateColumns, so the breakpoint always
+   applies regardless of the exact pixel value.
+   ═══════════════════════════════════════════════════════════════ */
+.split-layout {
+  display: grid;
+  grid-template-columns: 1fr var(--split-w, 380px);
+  gap: 1.4rem;
+  align-items: start;
 }
-@media (max-width:820px) {
-  .page > div[style*="grid-template-columns: 1fr 1fr"] { grid-template-columns:1fr !important; }
+.split-layout--reverse { grid-template-columns: var(--split-w, 310px) 1fr; }
+.split-layout--even    { grid-template-columns: 1fr 1fr; }
+
+@media (max-width: 900px) {
+  .split-layout, .split-layout--reverse, .split-layout--even {
+    grid-template-columns: 1fr !important;
+  }
+  .split-layout > *:last-child { position: static !important; }
+}
+@media (max-width: 820px) {
+  .split-layout--even { grid-template-columns: 1fr !important; }
 }
 @media (max-width:640px) {
   .page-wrap { padding:1.5rem 1rem 4rem; }

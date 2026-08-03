@@ -186,7 +186,16 @@ class Extraction(Base):
     original_filename = Column(String(500))
 
     chords            = Column(JSON, default=list)
-    extra_data        = Column(JSON, default=dict)  # renamed from metadata (reserved by SQLAlchemy Declarative API)
+    # FIXED: the 001 migration creates this column as "metadata" (matching
+    # the migration file verbatim), but the Python attribute is named
+    # extra_data (SQLAlchemy's Declarative API reserves the name
+    # "metadata" on model classes for its own MetaData object, so the
+    # attribute can't be called metadata). Without this explicit column
+    # name, SQLAlchemy defaulted to looking for a column literally called
+    # "extra_data", which doesn't exist in the actual table — any query or
+    # insert through this model would fail with
+    # `column "extra_data" does not exist`.
+    extra_data        = Column("metadata", JSON, default=dict)
     filters           = Column(JSON, default=dict)
 
     file_url          = Column(String(500), nullable=True)
@@ -219,7 +228,7 @@ class Generation(Base):
     instruments   = Column(JSON, default=list)
     voice         = Column(String(50))
 
-    extra_data    = Column(JSON, default=dict)  # renamed from metadata
+    extra_data    = Column("metadata", JSON, default=dict)  # see note on Extraction.extra_data above
     audio_url     = Column(String(500), nullable=True)
     chord_sheet_url = Column(String(500), nullable=True)
     chords        = Column(JSON, default=list)
@@ -249,7 +258,7 @@ class LibraryItem(Base):
     item_type = Column(String(20))
     item_id   = Column(String(100))
     title     = Column(String(255))
-    extra_data = Column(JSON, default=dict)  # renamed from metadata
+    extra_data = Column("metadata", JSON, default=dict)  # see note on Extraction.extra_data above
 
     created_at = Column(DateTime(timezone=True), default=utcnow, index=True)
     added_at   = Column(DateTime(timezone=True), default=utcnow)

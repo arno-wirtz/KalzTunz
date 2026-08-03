@@ -2,21 +2,23 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { safeJson, useAuth } from '../App'
 
 import { ChordSynth, fmtDur, saveExtractionToLib } from '../utils/musicEngine'
+import MediaPlayer from '../components/MediaPlayer'
+import { IconBolt, IconDownload, IconShare, IconMusicDisc, IconClose, IconKey, IconClock, IconPiano, IconGuitar, IconDrum, IconStrings, IconHorn, IconMic, IconSliders } from '../components/Icons'
 
 const API      = import.meta.env.VITE_API_URL || ''
 const POLL_MS  = 2000
 const ACCEPTED = '.mp3,.wav,.flac,.ogg,.aac,.mp4,.webm,.mov'
 
 const INSTRUMENTS = [
-  { id:'all',     label:'All',      icon:'🎼', color:'var(--accent)'   },
-  { id:'piano',   label:'Piano',    icon:'🎹', color:'var(--accent-2)' },
-  { id:'guitar',  label:'Guitar',   icon:'🎸', color:'#e87a30'         },
-  { id:'bass',    label:'Bass',     icon:'🎸', color:'#c44d2a'         },
-  { id:'drums',   label:'Drums',    icon:'🥁', color:'#d97706'         },
-  { id:'strings', label:'Strings',  icon:'🎻', color:'var(--accent-3)' },
-  { id:'brass',   label:'Brass',    icon:'🎷', color:'#f59e0b'         },
-  { id:'vocals',  label:'Vocals',   icon:'🎤', color:'var(--red)'      },
-  { id:'synth',   label:'Synth',    icon:'🎛️', color:'#8b5cf6'         },
+  { id:'all',     label:'All',      Icon: IconMusicDisc, color:'var(--accent)'   },
+  { id:'piano',   label:'Piano',    Icon: IconPiano,     color:'var(--accent-2)' },
+  { id:'guitar',  label:'Guitar',   Icon: IconGuitar,    color:'#e87a30'         },
+  { id:'bass',    label:'Bass',     Icon: IconGuitar,    color:'#c44d2a'         },
+  { id:'drums',   label:'Drums',    Icon: IconDrum,      color:'#d97706'         },
+  { id:'strings', label:'Strings',  Icon: IconStrings,   color:'var(--accent-3)' },
+  { id:'brass',   label:'Brass',    Icon: IconHorn,      color:'#f59e0b'         },
+  { id:'vocals',  label:'Vocals',   Icon: IconMic,       color:'var(--red)'      },
+  { id:'synth',   label:'Synth',    Icon: IconSliders,   color:'#8b5cf6'         },
 ]
 
 const COLORS = ['var(--accent)','var(--accent-2)','var(--accent-3)','#e87a30','#8b5cf6','#d97706','var(--green)','var(--red)']
@@ -35,7 +37,7 @@ function detectInstr(file) {
   return d
 }
 
-/* ── Seek bar ────────────────────────────────────────────────── */
+/* ── Seek bar (for the generated-progression chord player) ─────── */
 function SeekBar({ progress, onSeek }) {
   const ref = useRef(null), drag = useRef(false)
   const get = e => { const r=ref.current?.getBoundingClientRect(); if(!r) return 0; const cx=e.touches?e.touches[0].clientX:e.clientX; return Math.max(0,Math.min(1,(cx-r.left)/r.width)) }
@@ -52,37 +54,7 @@ function SeekBar({ progress, onSeek }) {
   )
 }
 
-/* ── File player hook ────────────────────────────────────────── */
-function useFilePlayer(file) {
-  const [playing,setPlaying]=useState(false), [paused,setPaused]=useState(false)
-  const [progress,setProgress]=useState(0), [elapsed,setElapsed]=useState(0), [duration,setDuration]=useState(0)
-  const aRef=useRef(null), urlRef=useRef(null), tmr=useRef(null)
-  const clear=()=>{ if(tmr.current){clearInterval(tmr.current);tmr.current=null} }
-
-  useEffect(()=>{
-    if(urlRef.current){URL.revokeObjectURL(urlRef.current);urlRef.current=null}
-    clear(); if(aRef.current){aRef.current.pause();aRef.current=null}
-    setPlaying(false);setPaused(false);setProgress(0);setElapsed(0);setDuration(0)
-    if(!file||!file.type.startsWith('audio/'))return
-    const url=URL.createObjectURL(file); urlRef.current=url
-    const a=new Audio(url); aRef.current=a
-    a.onloadedmetadata=()=>setDuration(a.duration||0)
-    a.onended=()=>{clear();setPlaying(false);setPaused(false);setProgress(0);setElapsed(0)}
-  },[file])
-
-  useEffect(()=>()=>{clear();if(urlRef.current)URL.revokeObjectURL(urlRef.current)},[])
-
-  const tick=useCallback(()=>{ const a=aRef.current; if(!a)return; setElapsed(a.currentTime); if(a.duration)setProgress(a.currentTime/a.duration) },[])
-  const play=useCallback(()=>{ aRef.current?.play().then(()=>{setPlaying(true);setPaused(false);clear();tmr.current=setInterval(tick,100)}).catch(()=>{}) },[tick])
-  const pause=useCallback(()=>{ aRef.current?.pause();clear();setPaused(true) },[])
-  const resume=useCallback(()=>{ aRef.current?.play().then(()=>{setPaused(false);tmr.current=setInterval(tick,100)}).catch(()=>{}) },[tick])
-  const stop=useCallback(()=>{ if(aRef.current){aRef.current.pause();aRef.current.currentTime=0} clear();setPlaying(false);setPaused(false);setProgress(0);setElapsed(0) },[])
-  const toggle=useCallback(()=>{ if(!playing&&!paused)play();else if(paused)resume();else pause() },[playing,paused,play,pause,resume])
-  const seekTo=useCallback(f=>{ const a=aRef.current;if(!a||!a.duration)return;a.currentTime=f*a.duration;setProgress(f);setElapsed(a.currentTime) },[])
-  return { playing, paused, progress, elapsed, duration, canPlay:!!file&&file.type.startsWith('audio/'), toggle, stop, seekTo }
-}
-
-/* ── Chord synth player hook ─────────────────────────────────── */
+/* ── Chord synth player hook (plays the extracted/suggested progression) ── */
 function useChordPlayer() {
   const sRef=useRef(null)
   const [playing,setPlaying]=useState(false),[paused,setPaused]=useState(false)
@@ -106,27 +78,6 @@ function useChordPlayer() {
   return {playing,paused,progress,elapsed,curChord,total,load,toggle,stop,seekTo}
 }
 
-/* ── File player bar ─────────────────────────────────────────── */
-function FilePlayerBar({ player, fileName }) {
-  const { playing, paused, progress, elapsed, duration, canPlay, toggle, seekTo } = player
-  if (!canPlay) return null
-  return (
-    <div style={{ background:'linear-gradient(135deg,var(--bg-3),var(--bg-2))',border:'1px solid var(--border-hi)',borderRadius:13,padding:'.65rem .9rem',marginBottom:'1rem' }}>
-      <div style={{ display:'flex',alignItems:'center',gap:'.55rem',marginBottom:'.38rem' }}>
-        <button onClick={toggle} style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,var(--accent),var(--accent-2))',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0,boxShadow:'0 3px 10px rgba(255,107,71,.28)',transition:'transform .15s' }} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'} onMouseLeave={e=>e.currentTarget.style.transform=''}>
-          {playing&&!paused?<svg width={12} height={12} viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>:<svg width={12} height={12} viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>}
-        </button>
-        <div style={{ flex:1,minWidth:0 }}>
-          <div style={{ fontSize:'.72rem',fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{fileName||'Audio file'}</div>
-          <div style={{ fontSize:'.62rem',color:'var(--text-3)' }}>{playing&&!paused?'▶ Playing…':paused?'⏸ Paused':'Preview while extracting'}</div>
-        </div>
-        <span style={{ fontSize:'.67rem',color:'var(--text-3)',fontFamily:"'Space Mono',monospace",flexShrink:0 }}>{fmtDur(elapsed)} / {fmtDur(duration)}</span>
-      </div>
-      <SeekBar progress={progress} onSeek={seekTo}/>
-    </div>
-  )
-}
-
 /* ── Chord player bar ────────────────────────────────────────── */
 function ChordPlayerBar({ chordPlayer, progressions, bpm }) {
   const { playing,paused,progress,elapsed,curChord,total,toggle,stop,seekTo } = chordPlayer
@@ -135,7 +86,7 @@ function ChordPlayerBar({ chordPlayer, progressions, bpm }) {
   return (
     <div style={{ background:'linear-gradient(135deg,var(--bg-3),var(--bg-2))',border:'1px solid var(--border-hi)',borderRadius:13,padding:'.65rem .9rem',marginBottom:'1rem' }}>
       <div style={{ display:'flex',alignItems:'center',gap:'.55rem',marginBottom:'.38rem' }}>
-        <button onClick={toggle} style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,var(--accent),var(--accent-2))',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0,boxShadow:'0 3px 10px rgba(255,107,71,.28)',transition:'transform .15s' }} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'} onMouseLeave={e=>e.currentTarget.style.transform=''}>
+        <button onClick={toggle} style={{ width:32,height:32,borderRadius:'50%',background:'linear-gradient(135deg,var(--accent),var(--accent-2))',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0,boxShadow:'0 3px 10px rgba(56,189,248,.28)',transition:'transform .15s' }} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'} onMouseLeave={e=>e.currentTarget.style.transform=''}>
           {playing&&!paused?<svg width={12} height={12} viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>:<svg width={12} height={12} viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>}
         </button>
         {(playing||paused)&&<button onClick={stop} style={{ width:24,height:24,borderRadius:'50%',border:'1px solid var(--border)',background:'var(--bg-4)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text-3)',flexShrink:0 }}><svg width={8} height={8} viewBox="0 0 24 24" fill="currentColor"><rect x={4} y={4} width={16} height={16}/></svg></button>}
@@ -220,7 +171,7 @@ function ShareModal({ result, file, onClose }) {
       <div style={{ width:'100%',maxWidth:400,background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:22,padding:'1.75rem',boxShadow:'0 24px 80px rgba(0,0,0,.55)' }} onClick={e=>e.stopPropagation()}>
         <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem' }}>
           <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:'1rem',fontWeight:800 }}>Share Extraction</h2>
-          <button onClick={onClose} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.18rem .55rem',cursor:'pointer',fontSize:'.72rem',color:'var(--text-3)',fontFamily:'inherit' }}>✕</button>
+          <button onClick={onClose} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.3rem',cursor:'pointer',color:'var(--text-3)',display:'flex' }}><IconClose size={14}/></button>
         </div>
         <div style={{ background:'var(--bg-3)',borderRadius:10,padding:'.65rem',fontSize:'.72rem',fontFamily:"'Space Mono',monospace",lineHeight:1.65,color:'var(--text-2)',marginBottom:'1rem',maxHeight:100,overflowY:'auto',border:'1px solid var(--border)',whiteSpace:'pre-wrap' }}>{text}</div>
         <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.45rem',marginBottom:'.6rem' }}>
@@ -228,7 +179,7 @@ function ShareModal({ result, file, onClose }) {
             <button key={p} onClick={()=>p==='native'?nat():share(p)} style={{ display:'flex',alignItems:'center',gap:'.45rem',padding:'.48rem .65rem',borderRadius:10,border:`1.5px solid ${c}33`,background:`${c}0e`,cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',color:c,transition:'all .18s' }} onMouseEnter={e=>{e.currentTarget.style.background=`${c}20`}} onMouseLeave={e=>{e.currentTarget.style.background=`${c}0e`}}>{i} {l}</button>
           ))}
         </div>
-        <button onClick={copy} className="btn btn--secondary" style={{ width:'100%',justifyContent:'center',background:copied?'rgba(52,211,153,.1)':'',borderColor:copied?'var(--green)':'',color:copied?'var(--green)':'' }}>{copied?'✓ Copied!':'📋 Copy text'}</button>
+        <button onClick={copy} className="btn btn--secondary" style={{ width:'100%',justifyContent:'center',background:copied?'rgba(74,222,128,.1)':'',borderColor:copied?'var(--accent-suc)':'',color:copied?'var(--accent-suc)':'' }}>{copied?'✓ Copied!':'Copy text'}</button>
       </div>
     </div>
   )
@@ -285,7 +236,6 @@ export default function Extraction() {
   const pollRef=useRef(null), inputRef=useRef(null)
   useEffect(()=>()=>{if(pollRef.current)clearInterval(pollRef.current)},[])
 
-  const filePlayer  = useFilePlayer(file)
   const chordPlayer = useChordPlayer()
 
   const pickFile = useCallback(f=>{
@@ -305,13 +255,12 @@ export default function Extraction() {
         setJobStatus(data.status)
         if(data.status==='finished'){
           clearInterval(pollRef.current); setResult(data.result); setAvailInstr(detectInstr(null))
-          filePlayer.stop()
           const progs=data.result?.suggested_progressions
           if(progs?.length)chordPlayer.load(progs[0],data.result?.metadata?.bpm)
         } else if(data.status==='failed'){clearInterval(pollRef.current);setError(data.error||'Extraction failed.')}
       }catch(e){console.error(e)}
     },POLL_MS)
-  },[getToken,filePlayer,chordPlayer])
+  },[getToken,chordPlayer])
 
   const handleSubmit=async()=>{
     if(!file)return
@@ -327,7 +276,7 @@ export default function Extraction() {
       if(!res.ok) throw new Error(data.detail||`Server error ${res.status}`)
       setJobId(data.job_id)
       if(data.mode==='sync'&&data.result){
-        setJobStatus('finished');setResult(data.result);filePlayer.stop()
+        setJobStatus('finished');setResult(data.result)
         const progs=data.result?.suggested_progressions
         if(progs?.length)chordPlayer.load(progs[0],data.result?.metadata?.bpm)
       } else { setJobStatus('queued');startPolling(data.job_id) }
@@ -376,12 +325,12 @@ export default function Extraction() {
       {showShare&&<ShareModal result={result} file={file} onClose={()=>setShowShare(false)}/>}
 
       <div className="page-header" style={{ marginBottom:'1.75rem' }}>
-        <div className="page-header__badge">🎸 Chord Extraction</div>
+        <div className="page-header__badge">Chord Extraction</div>
         <h1 className="page-header__title">Extract Chords from Any Audio</h1>
         <p className="page-header__sub">Upload audio or video — get a full chord sheet with key, BPM, PDF export. Play your file while it processes. Save and share results.</p>
       </div>
 
-      <div style={{ display:'grid',gridTemplateColumns:'310px 1fr',gap:'1.5rem',alignItems:'start' }}>
+      <div className="split-layout split-layout--reverse" style={{ '--split-w': '310px' }}>
         {/* LEFT */}
         <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
 
@@ -397,7 +346,9 @@ export default function Extraction() {
               onDrop={onDrop}
               onClick={()=>inputRef.current?.click()}
               style={{ borderRadius:16,minHeight:105,cursor:'pointer' }}>
-              <div className="upload-zone__icon" style={{ fontSize:'2rem' }}>{file?'🎵':'📂'}</div>
+              <div className="upload-zone__icon" style={{ display:'flex',justifyContent:'center',color:'var(--accent)' }}>
+                {file ? <IconMusicDisc size={34}/> : <IconBolt size={34}/>}
+              </div>
               <div className="upload-zone__title" style={{ fontSize:'.88rem' }}>{file?file.name:'Drop audio or video here'}</div>
               <div className="upload-zone__sub" style={{ fontSize:'.74rem' }}>
                 {file?`${(file.size/1024/1024).toFixed(2)} MB · ${fileType}`:'MP3 WAV FLAC OGG AAC MP4 MOV'}
@@ -405,7 +356,14 @@ export default function Extraction() {
             </div>
           </div>
 
-          <FilePlayerBar player={filePlayer} fileName={file?.name}/>
+          {/* Cover-art player with drag seek, replay and loop — replaces the old bare progress bar */}
+          {file && (
+            <MediaPlayer
+              file={file}
+              title={file.name}
+              subtitle={`${(file.size/1024/1024).toFixed(2)} MB · ${fileType}`}
+            />
+          )}
 
           <div className="card" style={{ padding:'1.1rem' }}>
             <div style={{ fontWeight:700,fontSize:'.78rem',color:'var(--text-2)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.75rem' }}>2 · Options</div>
@@ -431,13 +389,13 @@ export default function Extraction() {
             </div>
             <div style={{ display:'flex',flexWrap:'wrap',gap:'.35rem' }}>
               {INSTRUMENTS.filter(i=>availInstr.has(i.id)).map(inst=>(
-                <button key={inst.id} onClick={()=>setInstrument(inst.id)} style={{ display:'flex',alignItems:'center',gap:'.28rem',padding:'.28rem .6rem',borderRadius:999,border:`1.5px solid ${instrument===inst.id?inst.color:'var(--border-hi)'}`,background:instrument===inst.id?`${inst.color}18`:'transparent',color:instrument===inst.id?inst.color:'var(--text-2)',fontSize:'.74rem',fontWeight:600,cursor:'pointer',transition:'all .18s',fontFamily:'inherit' }}>{inst.icon} {inst.label}</button>
+                <button key={inst.id} onClick={()=>setInstrument(inst.id)} style={{ display:'flex',alignItems:'center',gap:'.32rem',padding:'.28rem .6rem',borderRadius:999,border:`1.5px solid ${instrument===inst.id?inst.color:'var(--border-hi)'}`,background:instrument===inst.id?`${inst.color}18`:'transparent',color:instrument===inst.id?inst.color:'var(--text-2)',fontSize:'.74rem',fontWeight:600,cursor:'pointer',transition:'all .18s',fontFamily:'inherit' }}><inst.Icon size={13}/> {inst.label}</button>
               ))}
             </div>
           </div>
 
-          <button className="btn btn--primary" onClick={handleSubmit} disabled={!file||uploading||isProcessing} style={{ padding:'.8rem',fontSize:'.95rem',justifyContent:'center',borderRadius:14 }}>
-            {uploading?<><span className="spinner" style={{width:14,height:14,borderWidth:2}}/> Uploading…</>:isProcessing?<><span className="spinner" style={{width:14,height:14,borderWidth:2}}/> Analysing…</>:'⚡ Extract Chords'}
+          <button className="btn btn--primary" onClick={handleSubmit} disabled={!file||uploading||isProcessing} style={{ padding:'.8rem',fontSize:'.95rem',justifyContent:'center',borderRadius:14,gap:'.5rem' }}>
+            {uploading?<><span className="spinner" style={{width:14,height:14,borderWidth:2}}/> Uploading…</>:isProcessing?<><span className="spinner" style={{width:14,height:14,borderWidth:2}}/> Analysing…</>:<><IconBolt size={16}/> Extract Chords</>}
           </button>
 
           {error&&<div className="alert alert--error" style={{ fontSize:'.82rem' }}>{error}</div>}
@@ -458,7 +416,7 @@ export default function Extraction() {
         <div style={{ display:'flex',flexDirection:'column',gap:'1rem' }}>
           {!hasResult&&!isProcessing&&(
             <div className="card" style={{ textAlign:'center',padding:'4rem 2rem',color:'var(--text-3)' }}>
-              <div style={{ fontSize:'3rem',marginBottom:'1rem' }}>🎼</div>
+              <div style={{ display:'flex',justifyContent:'center',marginBottom:'1rem',color:'var(--accent)' }}><IconMusicDisc size={48}/></div>
               <p style={{ fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:'1rem',color:'var(--text-2)',marginBottom:'.5rem' }}>Ready to extract</p>
               <p style={{ fontSize:'.82rem' }}>Upload a file and click Extract Chords</p>
             </div>
@@ -478,9 +436,9 @@ export default function Extraction() {
               <ChordPlayerBar chordPlayer={chordPlayer} progressions={result.suggested_progressions} bpm={result.metadata?.bpm}/>
 
               <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'.6rem' }}>
-                {[{label:'Key',val:result.metadata?.key||'—',icon:'🔑',color:'var(--accent)'},{label:'BPM',val:result.metadata?.bpm||'—',icon:'♩',color:'var(--accent-2)'},{label:'Duration',val:fmtDur(result.metadata?.duration||0),icon:'⏱',color:'var(--accent-3)'},{label:'Chords',val:filteredChords.length,icon:'🎼',color:'var(--green)'}].map(({label,val,icon,color})=>(
+                {[{label:'Key',val:result.metadata?.key||'—',Icon:IconKey,color:'var(--accent)'},{label:'BPM',val:result.metadata?.bpm||'—',Icon:IconBolt,color:'var(--accent-2)'},{label:'Duration',val:fmtDur(result.metadata?.duration||0),Icon:IconClock,color:'var(--accent-3)'},{label:'Chords',val:filteredChords.length,Icon:IconMusicDisc,color:'var(--green)'}].map(({label,val,Icon,color})=>(
                   <div key={label} style={{ background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:14,padding:'.9rem',textAlign:'center',transition:'all .2s' }} onMouseEnter={e=>{e.currentTarget.style.borderColor=color;e.currentTarget.style.transform='translateY(-2px)'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='none'}}>
-                    <div style={{ fontSize:'1.1rem',marginBottom:'.2rem' }}>{icon}</div>
+                    <div style={{ display:'flex',justifyContent:'center',marginBottom:'.2rem',color }}><Icon size={18}/></div>
                     <div style={{ fontFamily:"'Space Mono',monospace",fontSize:'1.05rem',fontWeight:700,color }}>{val}</div>
                     <div style={{ fontSize:'.66rem',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.04em' }}>{label}</div>
                   </div>
@@ -489,29 +447,32 @@ export default function Extraction() {
 
               <div style={{ display:'flex',alignItems:'center',gap:'.5rem',flexWrap:'wrap' }}>
                 <div style={{ display:'flex',background:'var(--bg-2)',border:'1px solid var(--border)',borderRadius:10,padding:3,gap:2 }}>
-                  {[['sheet','🎼 Sheet'],['grid','⊞ Grid'],['timeline','↔ Timeline']].map(([v,l])=>(
+                  {[['sheet','Sheet'],['grid','Grid'],['timeline','Timeline']].map(([v,l])=>(
                     <button key={v} onClick={()=>setView(v)} style={{ padding:'.28rem .65rem',borderRadius:8,border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.74rem',transition:'all .18s',background:view===v?'var(--accent)':'transparent',color:view===v?'#fff':'var(--text-2)' }}>{l}</button>
                   ))}
                 </div>
-                {instrument!=='all'&&(
-                  <div style={{ display:'flex',alignItems:'center',gap:'.4rem',padding:'.25rem .65rem',borderRadius:999,background:'rgba(255,107,71,.08)',border:'1px solid rgba(255,107,71,.22)',fontSize:'.75rem',color:'var(--accent)' }}>
-                    {INSTRUMENTS.find(i=>i.id===instrument)?.icon} {INSTRUMENTS.find(i=>i.id===instrument)?.label}
+                {instrument!=='all'&&(()=>{
+                  const activeInst = INSTRUMENTS.find(i=>i.id===instrument)
+                  return (
+                  <div style={{ display:'flex',alignItems:'center',gap:'.4rem',padding:'.25rem .65rem',borderRadius:999,background:'rgba(56,189,248,.08)',border:'1px solid rgba(56,189,248,.22)',fontSize:'.75rem',color:'var(--accent)' }}>
+                    {activeInst && <activeInst.Icon size={13}/>} {activeInst?.label}
                     <span style={{ color:'var(--text-3)',fontSize:'.68rem' }}>({filteredChords.length}/{result.chords?.length})</span>
                     <button onClick={()=>setInstrument('all')} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',fontSize:'.75rem',padding:0 }}>×</button>
                   </div>
-                )}
+                  )
+                })()}
                 <div style={{ marginLeft:'auto',display:'flex',gap:'.35rem',flexWrap:'wrap' }}>
-                  <button className="btn btn--sm btn--secondary" onClick={handleSave}>💾 Save</button>
-                  <button className="btn btn--sm btn--secondary" onClick={()=>setShowShare(true)}>↗ Share</button>
-                  <button className="btn btn--sm btn--secondary" onClick={handleCSV}>↓ CSV</button>
-                  <button className="btn btn--sm btn--secondary" onClick={handleJSON}>↓ JSON</button>
-                  <button className="btn btn--sm btn--primary" onClick={async()=>{setPdfLoading(true);try{const{default:exp}=await import('../utils/extractionPdf.js');await exp(result,file,instrument)}catch{setError('PDF failed')}finally{setPdfLoading(false)}}} disabled={pdfLoading}>{pdfLoading?<><span className="spinner" style={{width:10,height:10,borderWidth:1.5}}/> …</>:'⬇ PDF'}</button>
+                  <button className="btn btn--sm btn--secondary" onClick={handleSave} style={{gap:'.35rem'}}><IconDownload size={13}/> Save</button>
+                  <button className="btn btn--sm btn--secondary" onClick={()=>setShowShare(true)} style={{gap:'.35rem'}}><IconShare size={13}/> Share</button>
+                  <button className="btn btn--sm btn--secondary" onClick={handleCSV} style={{gap:'.35rem'}}><IconDownload size={13}/> CSV</button>
+                  <button className="btn btn--sm btn--secondary" onClick={handleJSON} style={{gap:'.35rem'}}><IconDownload size={13}/> JSON</button>
+                  <button className="btn btn--sm btn--primary" onClick={async()=>{setPdfLoading(true);try{const{default:exp}=await import('../utils/extractionPdf.js');await exp(result,file,instrument)}catch{setError('PDF failed')}finally{setPdfLoading(false)}}} disabled={pdfLoading} style={{gap:'.35rem'}}>{pdfLoading?<><span className="spinner" style={{width:10,height:10,borderWidth:1.5}}/> …</>:<><IconDownload size={13}/> PDF</>}</button>
                 </div>
               </div>
 
               {result?._demo && (
-                <div className="alert" style={{ background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.3)',color:'#fbbf24',marginBottom:'.75rem',fontSize:'.82rem' }}>
-                  ⚡ Demo mode — backend unavailable. Showing sample extraction for <strong>{result.metadata?.filename||'your file'}</strong>.
+                <div className="alert" style={{ background:'rgba(251,191,36,.1)',border:'1px solid rgba(251,191,36,.3)',color:'var(--accent-warn)',marginBottom:'.75rem',fontSize:'.82rem' }}>
+                  Demo mode — backend unavailable. Showing sample extraction for <strong>{result.metadata?.filename||'your file'}</strong>.
                   The audio player still works — connect a backend for real chord extraction.
                 </div>
               )}
@@ -542,9 +503,9 @@ export default function Extraction() {
 
               {result.suggested_progressions?.length>0&&view!=='sheet'&&(
                 <div className="card" style={{ padding:'1.25rem' }}>
-                  <div style={{ fontWeight:700,fontSize:'.875rem',marginBottom:'.7rem' }}>🎵 Suggested Progressions</div>
+                  <div style={{ fontWeight:700,fontSize:'.875rem',marginBottom:'.7rem' }}>Suggested Progressions</div>
                   {result.suggested_progressions.map((p,i)=>(
-                    <div key={i} style={{ padding:'.5rem .75rem',borderRadius:10,marginBottom:'.4rem',background:i===0?'rgba(255,107,71,.06)':'var(--bg-2)',border:`1px solid ${i===0?'rgba(255,107,71,.22)':'var(--border)'}`,fontFamily:"'Space Mono',monospace",fontSize:'.87rem',color:i===0?'var(--accent)':'var(--text)',display:'flex',alignItems:'center',gap:'.65rem' }}>
+                    <div key={i} style={{ padding:'.5rem .75rem',borderRadius:10,marginBottom:'.4rem',background:i===0?'rgba(56,189,248,.06)':'var(--bg-2)',border:`1px solid ${i===0?'rgba(56,189,248,.22)':'var(--border)'}`,fontFamily:"'Space Mono',monospace",fontSize:'.87rem',color:i===0?'var(--accent)':'var(--text)',display:'flex',alignItems:'center',gap:'.65rem' }}>
                       <span style={{ color:'var(--text-3)',fontSize:'.7rem' }}>#{i+1}</span>{p}
                     </div>
                   ))}
@@ -554,7 +515,7 @@ export default function Extraction() {
           )}
         </div>
       </div>
-      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}@media(max-width:900px){.page-wrap>div[style*="grid-template-columns: 310px"]{grid-template-columns:1fr!important}}`}</style>
+      <style>{`@keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
     </div>
   )
 }

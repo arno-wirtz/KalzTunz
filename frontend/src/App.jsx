@@ -2,19 +2,19 @@ import { useState, useEffect, useContext, createContext, useCallback, useRef, la
 import { BrowserRouter, Routes, Route, Link, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { ThemeProvider, useTheme } from './ThemeContext'
 import Tutorial, { useTutorial } from './pages/Tutorial'
+import { IconSun, IconMoon } from './components/Icons'
 import './App.css'
-import './theme-spec.css'
 
 // Lazy-loaded pages — each loads only when first navigated to
 const Home        = lazy(() => import('./pages/Home'))
-const Generate    = lazy(() => import('./pages/Generate'))
-const Extraction  = lazy(() => import('./pages/Extraction'))
-const Search      = lazy(() => import('./pages/Search'))
-const Library     = lazy(() => import('./pages/Library'))
-const Settings    = lazy(() => import('./pages/Settings'))
-const Login       = lazy(() => import('./pages/Login'))
-const Register    = lazy(() => import('./pages/Register'))
-const AuthCallback= lazy(() => import('./pages/AuthCallback'))
+const Generate     = lazy(() => import('./pages/Generate'))
+const Extraction   = lazy(() => import('./pages/Extraction'))
+const Search       = lazy(() => import('./pages/Search'))
+const Library      = lazy(() => import('./pages/Library'))
+const Settings     = lazy(() => import('./pages/Settings'))
+const Login        = lazy(() => import('./pages/Login'))
+const Register     = lazy(() => import('./pages/Register'))
+const AuthCallback = lazy(() => import('./pages/AuthCallback'))
 
 // ==================== AUTH CONTEXT ====================
 
@@ -83,7 +83,6 @@ function AuthProvider({ children }) {
     localStorage.setItem('kalztunz_token',         token)
     localStorage.setItem('kalztunz_refresh_token', refreshToken)
     if (triggerTutorial) {
-      // Clear done flag and set a pending flag — useTutorial picks it up on next render
       localStorage.removeItem('kalztunz_tutorial_done')
       localStorage.setItem('kalztunz_show_tutorial', '1')
     }
@@ -143,7 +142,7 @@ function NavSearch() {
 
 function Nav() {
   const { user, logout } = useAuth()
-  const { theme, palette, toggleTheme, setPalette, COLOR_PALETTES } = useTheme()
+  const { theme, toggleTheme } = useTheme()
   const { startTour } = useTutorial()
   const navigate  = useNavigate()
   const location  = useLocation()
@@ -163,7 +162,7 @@ function Nav() {
   useEffect(() => { setOpen(false); setDrop(false) }, [location.pathname])
 
   const avatarSrc = user?.profile_pic
-    || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user?.username || 'U')}&backgroundColor=0d1a2e&textColor=ff6b47`
+    || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(user?.username || 'U')}&backgroundColor=0d1a2e&textColor=38bdf8`
 
   const NAV_LINKS = [
     ['/', 'Home'],
@@ -207,12 +206,11 @@ function Nav() {
             <Link to="/library" className={`nav-link ${isActive('/library') ? 'active' : ''}`} onClick={close}>Library</Link>
           )}
 
-          {/* Theme toggle */}
+          {/* Theme toggle — SVG sun/moon, no emoji */}
           <button className="nav-theme" onClick={toggleTheme}
             title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} aria-label="Toggle theme"
             style={{ display:'flex',alignItems:'center',gap:'.35rem' }}>
-            {theme === 'dark' ? '☀️' : '🌙'}
-            <span style={{ width:8,height:8,borderRadius:'50%',background:'var(--accent)',flexShrink:0,boxShadow:`0 0 6px var(--accent)` }}/>
+            {theme === 'dark' ? <IconSun size={15}/> : <IconMoon size={15}/>}
           </button>
 
           {/* Auth */}
@@ -237,7 +235,7 @@ function Nav() {
                     <div>
                       <div className="nav-drop-name">{user.username}</div>
                       <div className="nav-drop-email">{user.email}</div>
-                      <div className="nav-drop-settings-hint">⚙ View profile & settings →</div>
+                      <div className="nav-drop-settings-hint">View profile &amp; settings →</div>
                     </div>
                   </Link>
 
@@ -298,11 +296,10 @@ function AppInner() {
         <Suspense fallback={
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'60vh', flexDirection:'column', gap:'1rem' }}>
       <div style={{ width:40, height:40, border:'3px solid var(--border)', borderTopColor:'var(--accent)', borderRadius:'50%', animation:'spin .8s linear infinite' }}/>
-      <span style={{ color:'var(--text-3)', fontSize:'.82rem', fontFamily:"'Space Mono',monospace" }}>Loading…</span>
+      <span style={{ color:'var(--text-3)', fontSize:'.82rem', fontFamily:"'JetBrains Mono',monospace" }}>Loading…</span>
     </div>
   }>
   <Routes>
-          {/* Home is the default landing page */}
           <Route path="/"              element={<Home />} />
           <Route path="/search"        element={<Search />} />
           <Route path="/extract"       element={<Extraction />} />
@@ -312,7 +309,6 @@ function AppInner() {
           <Route path="/login"         element={<Login />} />
           <Route path="/register"      element={<Register />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
-          {/* Catch-all redirects to home */}
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Routes>
   </Suspense>
@@ -328,11 +324,10 @@ function AppInner() {
             <Link to="/generate">Generate</Link>
             <a href="/docs" target="_blank" rel="noreferrer">API</a>
           </nav>
-          <span className="footer-copy">© 2025 KalzTunz</span>
+          <span className="footer-copy">© 2026 KalzTunz</span>
         </div>
       </footer>
 
-      {/* Tutorial overlay */}
       {showTutorial && <Tutorial onDone={markDone} />}
     </div>
   )
