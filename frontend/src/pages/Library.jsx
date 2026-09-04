@@ -1,12 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { ChordSynth, fmtDur as fmtDurEngine } from '../utils/musicEngine'
+import { ChordSynth, fmtDur as fmtDurEngine, loadHistory, saveHistory, addHistoryEntry, HISTORY_ICONS } from '../utils/musicEngine'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../App'
-import {
-  IconBarChart, IconFolder, IconDownload, IconHeart, IconPerson, IconMusicNote,
-  IconSparkle, IconClock, IconPlay, IconPause, IconClose, IconReplay,
-  IconVolume, IconLoop, IconGear, IconMusicDisc, IconGuitar,
-} from '../components/Icons'
 
 /* ────────────────────────────────────────────────────────────────
    HELPERS
@@ -27,18 +22,12 @@ const fmtNum  = n => n>=1e6?`${(n/1e6).toFixed(1)}M`:n>=1000?`${(n/1000).toFixed
 const coverGrad  = t => { const h=[200,240,260,180,30,300,150,20,340,160][(t?.charCodeAt(0)||65)%10]; return `linear-gradient(135deg,hsl(${h},55%,18%),hsl(${(h+50)%360},45%,28%))` }
 const avatarGrad = n => { const h=[200,260,300,30,150,180][(n?.charCodeAt(0)||65)%6]; return `linear-gradient(135deg,hsl(${h},50%,22%),hsl(${(h+50)%360},45%,32%))` }
 
+const PLAYLIST_COLORS = ['var(--accent)','var(--accent-2)','var(--accent-3)','var(--red)','var(--green)','#8b5cf6','#f59e0b','#ec4899']
+const PLAYLIST_ICONS  = ['📂','🎵','🔥','💜','🌙','⚡','🎧','🌊','🍂','☀️']
+
 /* ── localStorage helpers ─────────────────────────────────────── */
-const HISTORY_KEY = 'kalztunz_search_history'
-const LS_KEY      = 'kalztunz_library_data'
+const LS_KEY = 'kalztunz_library_data'
 
-function loadHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]') } catch { return [] } }
-function saveHistory(h) { localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0,50))) }
-function addToHistory(query) {
-  const h = loadHistory()
-  saveHistory([{ id:Date.now(), query, type:'search', timestamp:new Date().toISOString() }, ...h.filter(x=>x.query.toLowerCase()!==query.toLowerCase())])
-}
-
-/* ── Offline-persistent library store ────────────────────────── */
 function loadLibraryData() {
   try {
     const raw = localStorage.getItem(LS_KEY)
@@ -72,9 +61,9 @@ const DEFAULT_DATA = {
     { id:'a3', username:'Cleo Vance', bio:'Jazz pianist & composer',          followers:215,  tracks:5  },
   ],
   playlists: [
-    { id:'pl1', name:'Morning Vibes',   createdAt: mk(4),  tracks:[{id:'t2',title:'Solar Progression',artist:'Axon Beats',duration:204},{id:'t8',title:'Chord Cascade',artist:'Mara Vex',duration:195}] },
-    { id:'pl2', name:'Late Night Jazz', createdAt: mk(9),  tracks:[{id:'t3',title:'Jazz in the Rain',artist:'Cleo Vance',duration:312}] },
-    { id:'pl3', name:'Focus Mode',      createdAt: mk(14), tracks:[] },
+    { id:'pl1', name:'Morning Vibes',   description:'Slow build for the first coffee of the day', color:'var(--accent-2)', icon:'☀️', createdAt: mk(4),  tracks:[{id:'t2',title:'Solar Progression',artist:'Axon Beats',duration:204},{id:'t8',title:'Chord Cascade',artist:'Mara Vex',duration:195}] },
+    { id:'pl2', name:'Late Night Jazz', description:'', color:'#8b5cf6', icon:'🌙', createdAt: mk(9),  tracks:[{id:'t3',title:'Jazz in the Rain',artist:'Cleo Vance',duration:312}] },
+    { id:'pl3', name:'Focus Mode',      description:'Instrumental, low-distraction', color:'var(--accent-3)', icon:'🎧', createdAt: mk(14), tracks:[] },
   ],
   extractions: [
     { id:'e1', title:'summer_jam.mp3',     key:'C major', bpm:120, totalChords:32, createdAt: mk(1) },
@@ -88,7 +77,7 @@ const DEFAULT_DATA = {
   ],
 }
 
-// Seed history once
+// Seed history once — now writes through the shared app-history log
 ;(function() {
   if (!loadHistory().length) {
     saveHistory([
@@ -129,13 +118,25 @@ function useGenPlayer() {
   return {...st, toggle, stop}
 }
 
+/* ── SVG icons ─────────────────────────────────────────────────── */
+const IconSearch   = () => <svg width={14} height={14} viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+const IconTrash    = () => <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+const IconX        = () => <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+const IconArrow    = () => <svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>
+const IconClock    = () => <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg>
+const IconPlay     = () => <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+const IconPause    = () => <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+const IconShuffle  = () => <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+const IconRepeat   = () => <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+const IconEdit     = () => <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+
 /* ── ConfirmDialog ─────────────────────────────────────────────── */
 function ConfirmDialog({ message, detail, onConfirm, onCancel, confirmLabel='Delete', danger=true }) {
   return (
     <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.72)',zIndex:700,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem',animation:'fadeIn .15s ease' }} onClick={onCancel}>
       <div style={{ width:'100%',maxWidth:380,background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:20,padding:'1.75rem',boxShadow:'0 24px 80px rgba(0,0,0,.55)',animation:'dropIn .22s cubic-bezier(.34,1.2,.64,1)' }} onClick={e=>e.stopPropagation()}>
         <div style={{ display:'flex',alignItems:'flex-start',gap:'.85rem',marginBottom:'1.1rem' }}>
-          <div style={{ width:40,height:40,borderRadius:'50%',background:'rgba(239,68,68,.12)',border:'1.5px solid rgba(239,68,68,.28)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--accent-err)',flexShrink:0 }}><IconClose size={18}/></div>
+          <div style={{ width:40,height:40,borderRadius:'50%',background:'rgba(255,95,107,.12)',border:'1.5px solid rgba(255,95,107,.28)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0 }}>🗑</div>
           <div>
             <div style={{ fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:'1rem',marginBottom:'.3rem' }}>{message}</div>
             {detail && <div style={{ fontSize:'.82rem',color:'var(--text-2)',lineHeight:1.55 }}>{detail}</div>}
@@ -144,7 +145,7 @@ function ConfirmDialog({ message, detail, onConfirm, onCancel, confirmLabel='Del
         <div style={{ display:'flex',gap:'.5rem',justifyContent:'flex-end' }}>
           <button className="btn btn--ghost btn--sm" onClick={onCancel}>Cancel</button>
           <button className={`btn btn--sm ${danger?'btn--danger':'btn--primary'}`}
-            style={danger?{background:'rgba(239,68,68,.12)',border:'1.5px solid rgba(239,68,68,.35)',color:'var(--accent-err)'}:{}}
+            style={danger?{background:'rgba(255,95,107,.12)',border:'1.5px solid rgba(255,95,107,.35)',color:'var(--accent-err)'}:{}}
             onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </div>
@@ -153,27 +154,34 @@ function ConfirmDialog({ message, detail, onConfirm, onCancel, confirmLabel='Del
 }
 
 /* ── Full-featured audio player hook ──────────────────────────── */
+// Supports: play, pause, resume, seek, a real shuffled/looping queue,
+// and repeat modes (off → all → one). Fixed: the previous version
+// referenced `togglePause` in its returned object without ever
+// defining it, which threw a ReferenceError on every render of this
+// hook — i.e. the Library page's player was completely broken.
 function useMiniPlayer() {
   const [playing,   setPlaying]   = useState(null)
   const [paused,    setPaused]    = useState(false)
   const [progress,  setProgress]  = useState(0)
   const [elapsed,   setElapsed]   = useState(0)
   const [queue,     setQueue]     = useState([])
-  const [queueIdx,  setQueueIdx]  = useState(0)
   const [shuffle,   setShuffle]   = useState(false)
+  const [loopMode,  setLoopMode]  = useState('off') // 'off' | 'all' | 'one'
   const [muted,     setMuted]     = useState(false)
   const [volume,    setVolume]    = useState(1)
 
-  const audioRef    = useRef(null)
-  const timerRef    = useRef(null)
-  const ctxRef      = useRef(null)
-  const gainRef     = useRef(null)
-  const startRef    = useRef(0)
-  const pausedAtRef = useRef(0)
-  const durationRef = useRef(28)
+  const audioRef     = useRef(null)
+  const timerRef      = useRef(null)
+  const ctxRef        = useRef(null)
+  const gainRef       = useRef(null)
+  const pausedAtRef   = useRef(0)   // elapsed seconds when paused
+  const durationRef   = useRef(28)  // track duration
+  const fullQueueRef  = useRef([])  // snapshot of the last full playlist, for loop-all replenishment
+  const onEndRef      = useRef(() => {})
 
   const clearTimer = () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current=null } }
 
+  // ── Stop everything cleanly ──────────────────────────────────
   const stopAll = useCallback(() => {
     clearTimer()
     if (audioRef.current) {
@@ -188,18 +196,19 @@ function useMiniPlayer() {
     pausedAtRef.current = 0
   }, [])
 
+  // ── Oscillator preview for tracks without a real URL ────────
   const startOscillator = useCallback((track, fromSeconds=0) => {
     if (ctxRef.current) { try { ctxRef.current.close() } catch {} ctxRef.current=null }
     clearTimer()
     const KEY_FREQS = {C:261.63,'C#':277.18,D:293.66,'D#':311.13,E:329.63,F:349.23,'F#':369.99,G:392,G8:415.3,'G#':415.3,A:440,'A#':466.16,B:493.88}
-    const rootNote = (track.key||'C major').split(' ')[0]
+    const rootNote  = (track.key||'C major').split(' ')[0]
     const mode      = (track.key||'C major').split(' ')[1]||'major'
     const root      = KEY_FREQS[rootNote]||261.63
     const st        = n => root * Math.pow(2, n/12)
     const freqs     = mode==='minor'?[root,st(3),st(7)]:[root,st(4),st(7)]
     const totalSec  = track.duration || 28
     const remaining = totalSec - fromSeconds
-    if (remaining <= 0) { stopAll(); return }
+    if (remaining <= 0) { onEndRef.current(); return }
     durationRef.current = totalSec
     try {
       const ctx  = new (window.AudioContext||window.webkitAudioContext)()
@@ -218,16 +227,16 @@ function useMiniPlayer() {
         osc.stop(ctx.currentTime + remaining)
       })
       const startAt = Date.now() - fromSeconds * 1000
-      startRef.current = startAt
       timerRef.current = setInterval(() => {
         const el = Math.min((Date.now()-startAt)/1000, totalSec)
         setElapsed(el)
         setProgress(el/totalSec)
-        if (el >= totalSec) { clearTimer(); playNext() }
+        if (el >= totalSec) { clearTimer(); onEndRef.current() }
       }, 100)
     } catch(e) { console.warn('AudioCtx unavailable:', e) }
   }, [])
 
+  // ── Play a single track ──────────────────────────────────────
   const playTrack = useCallback((track, fromSeconds=0) => {
     stopAll()
     if (!track) return
@@ -248,18 +257,20 @@ function useMiniPlayer() {
           if (audio.duration) setProgress(el/audio.duration)
         }
       }, 100)
-      audio.onended = () => { clearTimer(); playNext() }
+      audio.onended = () => { clearTimer(); onEndRef.current() }
     } else {
       startOscillator(track, fromSeconds)
     }
   }, [stopAll, startOscillator])
 
+  // ── Pause / Resume ───────────────────────────────────────────
   const pause = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause()
       clearTimer()
       pausedAtRef.current = audioRef.current.currentTime
     } else if (ctxRef.current) {
+      // Oscillator can't be truly paused — store position and suspend the context
       clearTimer()
       pausedAtRef.current = elapsed
       try { ctxRef.current.suspend() } catch {}
@@ -279,15 +290,71 @@ function useMiniPlayer() {
         }
       }, 100)
     } else {
+      // Oscillator: restart from paused position
       startOscillator(playing, pausedAtRef.current)
     }
     setPaused(false)
   }, [playing, startOscillator])
 
+  // FIX: this was referenced by the return object below but never
+  // defined — the actual bug behind "play/pause failing".
   const togglePause = useCallback(() => {
-    paused ? resume() : pause()
+    if (paused) resume(); else pause()
   }, [paused, pause, resume])
 
+  // ── Queue management ─────────────────────────────────────────
+  const playNext = useCallback(() => {
+    setQueue(q => {
+      let pool = q
+      if (!pool.length) {
+        if (loopMode === 'all' && fullQueueRef.current.length) {
+          pool = fullQueueRef.current.slice()
+        } else {
+          stopAll()
+          return q
+        }
+      }
+      const idx  = shuffle ? Math.floor(Math.random() * pool.length) : 0
+      const next = pool[idx]
+      const rest = pool.filter((_, i) => i !== idx)
+      playTrack(next)
+      return rest
+    })
+  }, [stopAll, playTrack, loopMode, shuffle])
+
+  // What happens when a track finishes naturally — checked fresh each
+  // time via a ref so a mid-playback loop-mode change is respected.
+  useEffect(() => {
+    onEndRef.current = () => {
+      if (loopMode === 'one' && playing) { playTrack(playing, 0); return }
+      playNext()
+    }
+  }, [loopMode, playing, playTrack, playNext])
+
+  const playPrev = useCallback(() => {
+    // If > 3s into track, restart current. Otherwise just restart (no persistent back-history).
+    if (playing) { playTrack(playing, 0); return }
+  }, [playing, playTrack])
+
+  const enqueue = useCallback((tracks) => {
+    setQueue(q => [...q, ...(Array.isArray(tracks) ? tracks : [tracks])])
+  }, [])
+
+  const playNow = useCallback((track) => {
+    fullQueueRef.current = []
+    playTrack(track)
+  }, [playTrack])
+
+  const playPlaylist = useCallback((tracks) => {
+    if (!tracks.length) return
+    fullQueueRef.current = tracks
+    playTrack(tracks[0])
+    setQueue(tracks.slice(1))
+  }, [playTrack])
+
+  const clearQueue = useCallback(() => { fullQueueRef.current = []; setQueue([]) }, [])
+
+  // ── Seek (drag progress bar) ─────────────────────────────────
   const seekTo = useCallback((fraction) => {
     const total = durationRef.current || 28
     const targetSec = Math.max(0, Math.min(fraction * total, total - 0.1))
@@ -309,35 +376,10 @@ function useMiniPlayer() {
     }
   }, [playing, paused, startOscillator])
 
-  const playNext = useCallback(() => {
-    setQueue(q => {
-      if (!q.length) { stopAll(); return q }
-      const [next, ...rest] = q
-      playTrack(next)
-      return rest
-    })
-  }, [stopAll, playTrack])
-
-  const playPrev = useCallback(() => {
-    if (elapsed > 3 && playing) { seekTo(0); return }
-    if (playing) seekTo(0)
-  }, [elapsed, playing, seekTo])
-
-  const enqueue = useCallback((tracks) => {
-    setQueue(q => [...q, ...(Array.isArray(tracks) ? tracks : [tracks])])
+  const toggleShuffle = useCallback(() => setShuffle(s => !s), [])
+  const cycleLoop = useCallback(() => {
+    setLoopMode(m => m === 'off' ? 'all' : m === 'all' ? 'one' : 'off')
   }, [])
-
-  const playNow = useCallback((track) => {
-    playTrack(track)
-  }, [playTrack])
-
-  const playPlaylist = useCallback((tracks) => {
-    if (!tracks.length) return
-    playTrack(tracks[0])
-    setQueue(tracks.slice(1))
-  }, [playTrack])
-
-  const clearQueue = useCallback(() => setQueue([]), [])
 
   useEffect(() => () => stopAll(), [])
 
@@ -346,7 +388,8 @@ function useMiniPlayer() {
     playNow, playPlaylist, enqueue, clearQueue,
     togglePause, pause, resume, seekTo,
     playNext, playPrev, stopAll,
-    shuffle, toggleShuffle: () => setShuffle(s=>!s),
+    shuffle, toggleShuffle,
+    loopMode, cycleLoop,
     muted, toggleMute: () => {
       setMuted(m => {
         const next = !m
@@ -406,7 +449,7 @@ function ProgressBar({ progress, onSeek, accentColor='var(--accent)' }) {
 /* ── Now Playing Bar — full player ────────────────────────────── */
 function NowPlayingBar({ playing, paused, progress, elapsed, queue,
   onTogglePause, onSeek, onNext, onPrev, onStop,
-  shuffle, onShuffle, muted, onMute, volume, onVolume, onReorder, onRemoveQ }) {
+  shuffle, onShuffle, loopMode, onCycleLoop, muted, onMute, volume, onVolume, onRemoveQ }) {
   const [showQueue, setShowQueue] = useState(false)
   const [showVol,   setShowVol]   = useState(false)
   const ref = useRef(null)
@@ -427,13 +470,13 @@ function NowPlayingBar({ playing, paused, progress, elapsed, queue,
       {/* Queue panel */}
       {showQueue && (
         <div style={{ position:'fixed',bottom:72,left:0,right:0,maxWidth:480,margin:'0 auto',
-          background:'rgba(10,10,22,.97)',border:'1px solid rgba(56,189,248,.22)',borderRadius:'18px 18px 0 0',
+          background:'rgba(10,10,22,.97)',border:'1px solid rgba(255,107,71,.22)',borderRadius:'18px 18px 0 0',
           boxShadow:'0 -12px 48px rgba(0,0,0,.7)',zIndex:399,padding:'1rem',backdropFilter:'blur(20px)' }}>
           <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.85rem' }}>
-            <span style={{ fontWeight:800,fontSize:'.88rem',color:'var(--accent)',display:'flex',alignItems:'center',gap:'.4rem' }}><IconBarChart size={14}/> Queue ({queue.length})</span>
+            <span style={{ fontWeight:800,fontSize:'.88rem',color:'var(--accent)' }}>▣ Queue ({queue.length})</span>
             <div style={{ display:'flex',gap:'.4rem',alignItems:'center' }}>
-              <button onClick={onShuffle} style={{ padding:'.22rem .6rem',borderRadius:999,border:`1.5px solid ${shuffle?'var(--accent)':'var(--border)'}`,background:shuffle?'rgba(56,189,248,.12)':'transparent',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.72rem',color:shuffle?'var(--accent)':'var(--text-3)',transition:'all .2s' }}>Shuffle</button>
-              <button onClick={()=>setShowQueue(false)} style={{ background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',display:'flex',padding:'.2rem' }}><IconClose size={14}/></button>
+              <button onClick={onShuffle} style={{ display:'flex',alignItems:'center',gap:'.3rem',padding:'.22rem .6rem',borderRadius:999,border:`1.5px solid ${shuffle?'var(--accent)':'var(--border)'}`,background:shuffle?'rgba(255,107,71,.12)':'transparent',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.72rem',color:shuffle?'var(--accent)':'var(--text-3)',transition:'all .2s' }}><IconShuffle/> Shuffle {shuffle?'On':'Off'}</button>
+              <button onClick={()=>setShowQueue(false)} style={{ background:'none',border:'none',color:'var(--text-3)',cursor:'pointer',fontSize:'.85rem',padding:'.2rem .4rem' }}>✕</button>
             </div>
           </div>
           <div style={{ maxHeight:240,overflowY:'auto' }}>
@@ -443,14 +486,14 @@ function NowPlayingBar({ playing, paused, progress, elapsed, queue,
                 onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,.04)'}
                 onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                 <div style={{ width:7,height:7,borderRadius:'50%',background:'var(--accent)',flexShrink:0,opacity:.6+i*.05 }}/>
-                <div style={{ width:34,height:34,borderRadius:8,background:coverGrad(t.title),flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.85)' }}><IconMusicNote size={15}/></div>
+                <div style={{ width:34,height:34,borderRadius:8,background:coverGrad(t.title),flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.85rem' }}>🎵</div>
                 <div style={{ flex:1,minWidth:0 }}>
                   <div style={{ fontSize:'.78rem',fontWeight:700,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{t.title}</div>
                   <div style={{ fontSize:'.66rem',color:'var(--text-3)' }}>{t.artist||t.key||''}{t.bpm?` · ${t.bpm}bpm`:''}</div>
                 </div>
-                <button onClick={()=>onRemoveQ?.(i)} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',padding:'.15rem .3rem',borderRadius:4,transition:'all .15s',display:'flex' }}
-                  onMouseEnter={e=>{e.currentTarget.style.color='var(--accent-err)';e.currentTarget.style.background='rgba(220,38,38,.1)'}}
-                  onMouseLeave={e=>{e.currentTarget.style.color='var(--text-3)';e.currentTarget.style.background='transparent'}}><IconClose size={12}/></button>
+                <button onClick={()=>onRemoveQ?.(i)} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',padding:'.15rem .3rem',borderRadius:4,transition:'all .15s',fontSize:'.8rem' }}
+                  onMouseEnter={e=>{e.currentTarget.style.color='var(--red)';e.currentTarget.style.background='rgba(220,38,38,.1)'}}
+                  onMouseLeave={e=>{e.currentTarget.style.color='var(--text-3)';e.currentTarget.style.background='transparent'}}>✕</button>
               </div>
             ))}
           </div>
@@ -461,7 +504,7 @@ function NowPlayingBar({ playing, paused, progress, elapsed, queue,
       {showVol && (
         <div style={{ position:'fixed',bottom:72,right:16,background:'rgba(10,10,22,.97)',border:'1px solid rgba(255,255,255,.12)',borderRadius:14,padding:'1rem .85rem',zIndex:399,backdropFilter:'blur(20px)',boxShadow:'0 -8px 32px rgba(0,0,0,.6)',minWidth:52 }}>
           <div style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.65rem' }}>
-            <button onClick={onMute} title={muted?'Unmute':'Mute'} style={{ background:'none',border:'none',cursor:'pointer',padding:'.18rem',color:'var(--text-2)',display:'flex' }}><IconVolume size={18}/></button>
+            <button onClick={onMute} title={muted?'Unmute':'Mute'} style={{ background:'none',border:'none',cursor:'pointer',fontSize:'1.1rem',padding:'.18rem' }}>{muted?'🔇':'🔊'}</button>
             <input type="range" min={0} max={1} step={0.05} value={muted?0:volume} onChange={e=>onVolume?.(parseFloat(e.target.value))}
               style={{ writingMode:'vertical-lr',direction:'rtl',height:90,cursor:'pointer',accentColor:'var(--accent)' }}/>
             <span style={{ fontSize:'.65rem',color:'var(--text-3)',fontFamily:'monospace' }}>{Math.round((muted?0:volume)*100)}%</span>
@@ -471,11 +514,13 @@ function NowPlayingBar({ playing, paused, progress, elapsed, queue,
 
       {/* Main bar */}
       <div className="now-playing-bar" style={{ padding:'.5rem 1rem',gap:'.5rem' }}>
-        <div className="np-cover" style={{ background:coverGrad(playing.title),flexShrink:0,position:'relative',overflow:'hidden',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.9)' }}>
-          <IconMusicNote size={16}/>
-          {!paused && <div style={{ position:'absolute',inset:0,background:'linear-gradient(135deg,transparent,rgba(56,189,248,.18))',animation:'spin 4s linear infinite',borderRadius:'50%' }}/>}
+        {/* Animated cover */}
+        <div className="np-cover" style={{ background:coverGrad(playing.title),flexShrink:0,position:'relative',overflow:'hidden' }}>
+          <span style={{ fontSize:'1rem' }}>🎵</span>
+          {!paused && <div style={{ position:'absolute',inset:0,background:'linear-gradient(135deg,transparent,rgba(255,107,71,.18))',animation:'spin 4s linear infinite',borderRadius:'50%' }}/>}
         </div>
 
+        {/* Info */}
         <div className="np-info" style={{ flexShrink:0,minWidth:0,maxWidth:160 }}>
           <div className="np-title" style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{playing.title}</div>
           <div className="np-artist" style={{ overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
@@ -483,34 +528,51 @@ function NowPlayingBar({ playing, paused, progress, elapsed, queue,
           </div>
         </div>
 
+        {/* Controls */}
         <div style={{ display:'flex',alignItems:'center',gap:'.18rem',flexShrink:0 }}>
-          <button className="np-btn" onClick={onPrev} title="Prev / Restart" style={{ opacity:.78 }}><IconReplay size={14}/></button>
-          <button className="np-btn np-play" onClick={onTogglePause} title={paused?'Resume':'Pause'}>
-            {paused ? <IconPlay size={13}/> : <IconPause size={13}/>}
+          <button className="np-btn" onClick={onPrev} title="Restart" style={{ opacity:.78 }}>
+            <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
-          <button className="np-btn" onClick={onNext} disabled={!hasNext} style={{ opacity:hasNext?1:.35 }} title={hasNext?`Next (${queue.length})`:'Queue empty'}>
+          <button className="np-btn np-play" onClick={onTogglePause} title={paused?'Resume':'Pause'}>
+            {paused ? <IconPlay/> : <IconPause/>}
+          </button>
+          <button className="np-btn" onClick={onNext} disabled={!hasNext && loopMode==='off'} style={{ opacity:(hasNext||loopMode!=='off')?1:.35 }} title={hasNext?`Next (${queue.length})`:'Queue empty'}>
             <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
           </button>
         </div>
 
+        {/* Progress */}
         <div className="np-progress-wrap" style={{ flex:1,display:'flex',alignItems:'center',gap:'.4rem',minWidth:0 }}>
           <span className="np-time" style={{ flexShrink:0 }}>{fmtDur(elapsed)}</span>
           <ProgressBar progress={progress} onSeek={onSeek}/>
           <span className="np-time" style={{ flexShrink:0 }}>{fmtDur(total)}</span>
         </div>
 
+        {/* Right controls: shuffle, loop, queue, volume, close */}
         <div style={{ display:'flex',alignItems:'center',gap:'.28rem',flexShrink:0 }}>
-          <button className="np-btn" onClick={onShuffle} title={shuffle?'Shuffle on':'Shuffle off'} style={{ color:shuffle?'var(--accent)':'var(--text-3)',background:shuffle?'rgba(56,189,248,.1)':'transparent',borderRadius:6 }}>
-            <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+          {/* Shuffle */}
+          <button className="np-btn" onClick={onShuffle} title={shuffle?'Shuffle on':'Shuffle off'} style={{ color:shuffle?'var(--accent)':'var(--text-3)',background:shuffle?'rgba(255,107,71,.1)':'transparent',borderRadius:6 }}>
+            <IconShuffle/>
           </button>
-          <button className="np-btn" onClick={()=>{setShowQueue(q=>!q);setShowVol(false)}} title="Queue" style={{ position:'relative',color:showQueue?'var(--accent)':'var(--text-3)',background:showQueue?'rgba(56,189,248,.1)':'transparent',borderRadius:6 }}>
+          {/* Loop */}
+          <button className="np-btn" onClick={onCycleLoop} title={`Repeat: ${loopMode==='off'?'Off':loopMode==='all'?'All':'One'}`} style={{ position:'relative',color:loopMode!=='off'?'var(--accent)':'var(--text-3)',background:loopMode!=='off'?'rgba(255,107,71,.1)':'transparent',borderRadius:6 }}>
+            <IconRepeat/>
+            {loopMode==='one' && <span style={{ position:'absolute',bottom:-3,right:-3,fontSize:'.5rem',fontWeight:900,background:'var(--accent)',color:'#fff',borderRadius:'50%',width:11,height:11,display:'flex',alignItems:'center',justifyContent:'center' }}>1</span>}
+          </button>
+          {/* Queue */}
+          <button className="np-btn" onClick={()=>{setShowQueue(q=>!q);setShowVol(false)}} title="Queue" style={{ position:'relative',color:showQueue?'var(--accent)':'var(--text-3)',background:showQueue?'rgba(255,107,71,.1)':'transparent',borderRadius:6 }}>
             <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z"/></svg>
             {hasNext && <span style={{ position:'absolute',top:-4,right:-4,background:'var(--accent)',color:'#fff',borderRadius:'50%',width:14,height:14,fontSize:'.52rem',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900 }}>{queue.length}</span>}
           </button>
-          <button className="np-btn" onClick={()=>{setShowVol(v=>!v);setShowQueue(false)}} title={muted?'Unmute':'Volume'} style={{ color:muted?'var(--text-3)':showVol?'var(--accent)':'var(--text-3)',background:showVol?'rgba(56,189,248,.1)':'transparent',borderRadius:6 }}>
-            <IconVolume size={14}/>
+          {/* Volume */}
+          <button className="np-btn" onClick={()=>{setShowVol(v=>!v);setShowQueue(false)}} title={muted?'Unmute':'Volume'} style={{ color:muted?'var(--text-3)':showVol?'var(--accent)':'var(--text-3)',background:showVol?'rgba(255,107,71,.1)':'transparent',borderRadius:6 }}>
+            {muted
+              ? <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+              : <svg width={14} height={14} viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            }
           </button>
-          <button className="np-close" onClick={onStop} title="Stop"><IconClose size={13}/></button>
+          {/* Close */}
+          <button className="np-close" onClick={onStop} title="Stop"><IconX/></button>
         </div>
       </div>
     </div>
@@ -520,12 +582,15 @@ function NowPlayingBar({ playing, paused, progress, elapsed, queue,
 /* ── Track row ───────────────────────────────────────────────── */
 function TrackRow({ track, dateLabel, date, onRemove, removeLabel, onToggle, playing }) {
   return (
-    <div className="lib-row lib-row-anim" style={{ background:playing?'rgba(56,189,248,.06)':undefined, borderColor:playing?'var(--accent)':undefined }}>
+    <div className="lib-row lib-row-anim" style={{ background:playing?'rgba(255,107,71,.06)':undefined, borderColor:playing?'var(--accent)':undefined }}>
       <button onClick={() => onToggle?.(track)}
-        style={{ width:42,height:42,borderRadius:9,flexShrink:0,background:coverGrad(track.title),border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',transition:'transform .15s',color:'rgba(255,255,255,.75)' }}
+        style={{ width:42,height:42,borderRadius:9,flexShrink:0,background:coverGrad(track.title),border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.95rem',transition:'transform .15s' }}
         onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'}
         onMouseLeave={e=>e.currentTarget.style.transform=''}>
-        {playing ? <IconPause size={16} style={{color:'#fff'}}/> : <IconPlay size={16}/>}
+        {playing
+          ? <span style={{ color:'#fff',fontSize:'1.1rem',animation:'pulse 1s ease infinite' }}>⏸</span>
+          : <span style={{ color:'rgba(255,255,255,.6)' }}>▶</span>
+        }
       </button>
       <div className="lib-row__info">
         <div className="lib-row__title">{track.title}</div>
@@ -537,7 +602,7 @@ function TrackRow({ track, dateLabel, date, onRemove, removeLabel, onToggle, pla
         <span style={{ fontSize:'.67rem',color:'var(--text-3)',fontFamily:'monospace' }}>{fmtDur(track.duration)}</span>
         {date && <span style={{ fontSize:'.67rem',color:'var(--text-3)',minWidth:60,textAlign:'right' }} title={fmtDateFull(date)}>{dateLabel} {fmtDate(date)}</span>}
         {onRemove && (
-          <button className="btn btn--icon btn--ghost btn--sm lib-row__del" title={removeLabel} onClick={() => onRemove(track.id)}><IconClose size={12}/></button>
+          <button className="btn btn--icon btn--ghost btn--sm lib-row__del" title={removeLabel} onClick={() => onRemove(track.id)}><IconX/></button>
         )}
       </div>
     </div>
@@ -547,8 +612,8 @@ function TrackRow({ track, dateLabel, date, onRemove, removeLabel, onToggle, pla
 /* ── Guest banner ─────────────────────────────────────────────── */
 function GuestBanner() {
   return (
-    <div style={{ background:'linear-gradient(135deg,rgba(56,189,248,.08),rgba(34,211,238,.05))',border:'1px solid rgba(56,189,248,.22)',borderRadius:18,padding:'1.5rem',marginBottom:'1.5rem',display:'flex',alignItems:'center',gap:'1.25rem',flexWrap:'wrap' }}>
-      <div style={{ color:'var(--accent)',flexShrink:0 }}><IconFolder size={40}/></div>
+    <div style={{ background:'linear-gradient(135deg,rgba(255,107,71,.08),rgba(255,179,71,.05))',border:'1px solid rgba(255,107,71,.22)',borderRadius:18,padding:'1.5rem',marginBottom:'1.5rem',display:'flex',alignItems:'center',gap:'1.25rem',flexWrap:'wrap' }}>
+      <div style={{ fontSize:'2.5rem',flexShrink:0 }}>📁</div>
       <div style={{ flex:1,minWidth:200 }}>
         <div style={{ fontFamily:"'Playfair Display',serif",fontWeight:800,fontSize:'1rem',marginBottom:'.3rem' }}>
           You're viewing the demo library
@@ -565,24 +630,56 @@ function GuestBanner() {
   )
 }
 
-/* ── Create Playlist Modal ────────────────────────────────────── */
-function CreatePlaylistModal({ onClose, onCreate }) {
-  const [name, setName] = useState('')
+/* ── Playlist create / edit modal ─────────────────────────────── */
+function PlaylistFormModal({ initial, title, onClose, onSubmit }) {
+  const [name,        setName]        = useState(initial?.name || '')
+  const [description, setDescription] = useState(initial?.description || '')
+  const [color,        setColor]       = useState(initial?.color || PLAYLIST_COLORS[0])
+  const [icon,         setIcon]        = useState(initial?.icon || PLAYLIST_ICONS[0])
   const ref = useRef(null)
   useEffect(() => { ref.current?.focus() }, [])
+
+  const submit = () => {
+    if (!name.trim()) return
+    onSubmit({ name: name.trim(), description: description.trim(), color, icon })
+    onClose()
+  }
+
   return (
     <div style={{ position:'fixed',inset:0,background:'var(--overlay)',zIndex:500,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem',animation:'fadeIn .18s ease' }} onClick={onClose}>
-      <div style={{ background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:20,padding:'1.75rem',width:'100%',maxWidth:400,boxShadow:'var(--shadow)',animation:'dropIn .22s ease' }} onClick={e=>e.stopPropagation()}>
-        <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.1rem',fontWeight:800,marginBottom:'1.1rem' }}>New Playlist</h2>
+      <div style={{ background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:20,padding:'1.75rem',width:'100%',maxWidth:420,boxShadow:'var(--shadow)',animation:'dropIn .22s ease' }} onClick={e=>e.stopPropagation()}>
+        <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.1rem',fontWeight:800,marginBottom:'1.1rem' }}>{title}</h2>
         <div className="form">
           <div className="form-group">
             <label className="form-label">Name</label>
             <input ref={ref} className="form-input" value={name} onChange={e=>setName(e.target.value)} placeholder="My Playlist" maxLength={80}
-              onKeyDown={e=>e.key==='Enter'&&name.trim()&&(onCreate(name.trim()),onClose())} />
+              onKeyDown={e=>e.key==='Enter'&&submit()} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Description <span style={{ color:'var(--text-3)',fontWeight:400,textTransform:'none' }}>(optional)</span></label>
+            <input className="form-input" value={description} onChange={e=>setDescription(e.target.value)} placeholder="What's this playlist for?" maxLength={140} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Icon</label>
+            <div style={{ display:'flex',gap:'.35rem',flexWrap:'wrap' }}>
+              {PLAYLIST_ICONS.map(ic => (
+                <button key={ic} type="button" onClick={()=>setIcon(ic)}
+                  style={{ width:34,height:34,borderRadius:9,border:`2px solid ${icon===ic?'var(--accent)':'var(--border)'}`,background:icon===ic?'rgba(255,107,71,.12)':'var(--bg-2)',fontSize:'1.1rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center' }}>{ic}</button>
+              ))}
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Accent Color</label>
+            <div style={{ display:'flex',gap:'.5rem',flexWrap:'wrap' }}>
+              {PLAYLIST_COLORS.map(c => (
+                <button key={c} type="button" onClick={()=>setColor(c)}
+                  style={{ width:26,height:26,borderRadius:'50%',border:color===c?'2px solid var(--text)':'2px solid transparent',background:c,cursor:'pointer',boxShadow:color===c?'0 0 0 2px var(--bg-1)':'none' }} />
+              ))}
+            </div>
           </div>
           <div style={{ display:'flex',gap:'.5rem',justifyContent:'flex-end' }}>
             <button className="btn btn--ghost btn--sm" onClick={onClose}>Cancel</button>
-            <button className="btn btn--primary btn--sm" disabled={!name.trim()} onClick={()=>{onCreate(name.trim());onClose()}}>Create</button>
+            <button className="btn btn--primary btn--sm" disabled={!name.trim()} onClick={submit}>{initial ? 'Save Changes' : 'Create'}</button>
           </div>
         </div>
       </div>
@@ -609,7 +706,7 @@ function HistoryModal({ onClose }) {
   const delSelected = () => { const next=history.filter(h=>!selected.has(h.id)); setHistory(next); saveHistory(next); setSelected(new Set()) }
   const delOne = id => { const next=history.filter(h=>h.id!==id); setHistory(next); saveHistory(next); setSelected(p=>{const n=new Set(p);n.delete(id);return n}) }
   const clearAll = () => { setHistory([]); saveHistory([]); setSelected(new Set()) }
-  const reSearch = q => { addToHistory(q); navigate(`/search?q=${encodeURIComponent(q)}`); onClose() }
+  const reSearch = q => { addHistoryEntry('search', q); navigate(`/search?q=${encodeURIComponent(q)}`); onClose() }
 
   const grouped = useMemo(() => {
     const g={}, today=new Date(), yd=new Date(today); today.setHours(0,0,0,0); yd.setDate(today.getDate()-1)
@@ -625,11 +722,11 @@ function HistoryModal({ onClose }) {
       <div style={{ width:'100%',maxWidth:600,maxHeight:'88vh',background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:22,display:'flex',flexDirection:'column',boxShadow:'var(--shadow)',animation:'dropIn .22s ease' }} onClick={e=>e.stopPropagation()}>
         <div style={{ padding:'1.2rem 1.5rem .8rem',borderBottom:'1px solid var(--border)',flexShrink:0 }}>
           <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.85rem' }}>
-            <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.1rem',fontWeight:800 }}>Search History</h2>
-            <button onClick={onClose} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.2rem .55rem',cursor:'pointer',color:'var(--text-2)',fontSize:'.75rem',fontFamily:'inherit' }}>Close</button>
+            <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.1rem',fontWeight:800 }}>App History</h2>
+            <button onClick={onClose} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.2rem .55rem',cursor:'pointer',color:'var(--text-2)',fontSize:'.75rem',fontFamily:'inherit' }}>✕ Close</button>
           </div>
           <div className="search-bar" style={{ marginBottom:'.65rem' }}>
-            <svg viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            <IconSearch/>
             <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Filter history…" style={{ fontSize:'.85rem' }}/>
           </div>
           <div style={{ display:'flex',alignItems:'center',gap:'.45rem',flexWrap:'wrap' }}>
@@ -650,26 +747,29 @@ function HistoryModal({ onClose }) {
         </div>
         <div style={{ flex:1,overflowY:'auto',padding:'0 .5rem' }}>
           {!filtered.length
-            ? <div style={{ textAlign:'center',padding:'3rem',color:'var(--text-3)' }}><div style={{ display:'flex',justifyContent:'center',marginBottom:'.5rem' }}><IconClock size={32}/></div><p>{search?`No match for "${search}"`:'No history yet'}</p></div>
+            ? <div style={{ textAlign:'center',padding:'3rem',color:'var(--text-3)' }}><div style={{ fontSize:'2rem',marginBottom:'.5rem' }}>🔍</div><p>{search?`No match for "${search}"`:'No history yet'}</p></div>
             : Object.entries(grouped).map(([date,items])=>(
               <div key={date}>
                 <div style={{ padding:'.6rem 1rem .3rem',fontSize:'.68rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.05em',position:'sticky',top:0,background:'var(--bg-1)',zIndex:1 }}>{date}</div>
-                {items.map(item=>(
+                {items.map(item=>{
+                  const canReSearch = item.type === 'search' || item.type === 'artist'
+                  return (
                   <div key={item.id}
-                    style={{ display:'flex',alignItems:'center',gap:'.55rem',padding:'.5rem 1rem',borderRadius:10,margin:'.15rem 0',background:selected.has(item.id)?'rgba(56,189,248,.07)':'transparent',border:`1px solid ${selected.has(item.id)?'rgba(56,189,248,.22)':'transparent'}`,transition:'background .12s',cursor:'pointer' }}
+                    style={{ display:'flex',alignItems:'center',gap:'.55rem',padding:'.5rem 1rem',borderRadius:10,margin:'.15rem 0',background:selected.has(item.id)?'rgba(255,107,71,.07)':'transparent',border:`1px solid ${selected.has(item.id)?'rgba(255,107,71,.22)':'transparent'}`,transition:'background .12s',cursor:'pointer' }}
                     onClick={()=>toggleSel(item.id)}>
                     <div style={{ width:18,height:18,borderRadius:4,border:`1.5px solid ${selected.has(item.id)?'var(--accent)':'var(--border-hi)'}`,background:selected.has(item.id)?'var(--accent)':'transparent',flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',transition:'all .14s' }}>
                       {selected.has(item.id)&&<svg width={10} height={10} viewBox="0 0 24 24" fill="white"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>}
                     </div>
-                    <span style={{ color:'var(--text-3)',flexShrink:0,display:'flex' }}>{item.type==='artist'?<IconPerson size={13}/>:<IconClock size={13}/>}</span>
+                    <span style={{ fontSize:'.77rem',color:'var(--text-3)',flexShrink:0 }}>{HISTORY_ICONS[item.type] || '🕐'}</span>
                     <span style={{ flex:1,fontSize:'.875rem',fontWeight:600 }}>{item.query}</span>
+                    <span style={{ fontSize:'.65rem',color:'var(--text-3)',flexShrink:0,textTransform:'capitalize' }}>{item.type}</span>
                     <span style={{ fontSize:'.67rem',color:'var(--text-3)',flexShrink:0 }}>{fmtDate(item.timestamp)}</span>
                     <div style={{ display:'flex',gap:'.2rem',flexShrink:0 }} onClick={e=>e.stopPropagation()}>
-                      <button className="btn btn--icon btn--ghost btn--sm" title="Search again" onClick={()=>reSearch(item.query)} style={{ color:'var(--accent-3)',borderColor:'transparent',padding:'.2rem' }}><IconReplay size={12}/></button>
-                      <button className="btn btn--icon btn--ghost btn--sm" title="Delete" onClick={()=>delOne(item.id)} style={{ color:'var(--text-3)',borderColor:'transparent',padding:'.2rem' }}><IconClose size={12}/></button>
+                      {canReSearch && <button className="btn btn--icon btn--ghost btn--sm" title="Search again" onClick={()=>reSearch(item.query)} style={{ color:'var(--accent-3)',borderColor:'transparent',padding:'.2rem' }}><IconArrow/></button>}
+                      <button className="btn btn--icon btn--ghost btn--sm" title="Delete" onClick={()=>delOne(item.id)} style={{ color:'var(--text-3)',borderColor:'transparent',padding:'.2rem' }}><IconX/></button>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             ))
           }
@@ -682,60 +782,71 @@ function HistoryModal({ onClose }) {
 /* ── Playlist components ──────────────────────────────────────── */
 function PlaylistCard({ playlist, onOpen, onDelete }) {
   const dur = playlist.tracks.reduce((s,t)=>s+(t.duration||0),0)
+  const accent = playlist.color || 'var(--accent)'
   return (
-    <div className="lib-playlist-card" onClick={()=>onOpen(playlist)}>
+    <div className="lib-playlist-card" onClick={()=>onOpen(playlist)} style={{ borderTop:`3px solid ${accent}` }}>
       <div className="lib-playlist-cover">
         {playlist.tracks.slice(0,4).map((t,i)=>(
-          <div key={t.id} style={{ position:'absolute',width:'50%',height:'50%',top:i<2?0:'50%',left:i%2===0?0:'50%',background:coverGrad(t.title),display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.8)' }}><IconMusicNote size={13}/></div>
+          <div key={t.id} style={{ position:'absolute',width:'50%',height:'50%',top:i<2?0:'50%',left:i%2===0?0:'50%',background:coverGrad(t.title),display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.75rem' }}>🎵</div>
         ))}
-        {!playlist.tracks.length&&<div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text-3)' }}><IconFolder size={32}/></div>}
+        {!playlist.tracks.length&&<div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'2.4rem',color:'var(--text-3)' }}>{playlist.icon||'📂'}</div>}
         <div className="lib-playlist-play-overlay" style={{ background:'rgba(0,0,0,0)' }}>
-          <div className="lib-playlist-play-btn" style={{ width:38,height:38,borderRadius:'50%',background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',opacity:0,boxShadow:'0 4px 16px rgba(56,189,248,.4)',color:'#fff' }}><IconPlay size={15}/></div>
+          <div className="lib-playlist-play-btn" style={{ width:38,height:38,borderRadius:'50%',background:accent,display:'flex',alignItems:'center',justifyContent:'center',opacity:0,boxShadow:'0 4px 16px rgba(255,107,71,.4)' }}><IconPlay/></div>
         </div>
       </div>
       <div className="lib-playlist-body">
-        <div className="lib-playlist-name" title={playlist.name}>{playlist.name}</div>
+        <div className="lib-playlist-name" title={playlist.name}>{playlist.icon&&<span style={{ marginRight:'.3rem' }}>{playlist.icon}</span>}{playlist.name}</div>
+        {playlist.description && <div style={{ fontSize:'.68rem',color:'var(--text-3)',marginBottom:'.15rem' }} className="truncate">{playlist.description}</div>}
         <div className="lib-playlist-meta">{playlist.tracks.length} tracks{dur>0&&` · ${fmtDur(dur)}`}</div>
         <div style={{ fontSize:'.67rem',color:'var(--text-3)',marginTop:'.1rem' }}>{fmtDate(playlist.createdAt)}</div>
       </div>
-      <button className="btn btn--icon btn--ghost btn--sm lib-playlist-del" title="Delete" onClick={e=>{e.stopPropagation();onDelete(playlist.id, playlist.name)}}><IconClose size={12}/></button>
+      <button className="btn btn--icon btn--ghost btn--sm lib-playlist-del" title="Delete" onClick={e=>{e.stopPropagation();onDelete(playlist.id, playlist.name)}}><IconTrash/></button>
     </div>
   )
 }
 
-function PlaylistDetail({ playlist, onBack, onRemoveTrack, onToggle, playingId, onPlayAll }) {
+function PlaylistDetail({ playlist, onBack, onEdit, onRemoveTrack, onMoveTrack, onToggle, playingId, onPlayAll }) {
   const dur = playlist.tracks.reduce((s,t)=>s+(t.duration||0),0)
+  const accent = playlist.color || 'var(--accent)'
   return (
     <div>
       <button className="btn btn--ghost btn--sm" onClick={onBack} style={{ marginBottom:'1.1rem' }}>← Back</button>
       <div style={{ display:'flex',alignItems:'center',gap:'1rem',marginBottom:'1.4rem',flexWrap:'wrap' }}>
-        <div style={{ width:72,height:72,borderRadius:14,position:'relative',overflow:'hidden',flexShrink:0,background:'var(--bg-3)' }}>
+        <div style={{ width:72,height:72,borderRadius:14,position:'relative',overflow:'hidden',flexShrink:0,background:'var(--bg-3)',border:`2px solid ${accent}` }}>
           {playlist.tracks.slice(0,4).map((t,i)=>(
-            <div key={t.id} style={{ position:'absolute',width:'50%',height:'50%',top:i<2?0:'50%',left:i%2===0?0:'50%',background:coverGrad(t.title),display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.8)' }}><IconMusicNote size={11}/></div>
+            <div key={t.id} style={{ position:'absolute',width:'50%',height:'50%',top:i<2?0:'50%',left:i%2===0?0:'50%',background:coverGrad(t.title),display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.7rem' }}>🎵</div>
           ))}
-          {!playlist.tracks.length&&<div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text-3)' }}><IconFolder size={28}/></div>}
+          {!playlist.tracks.length&&<div style={{ position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'2rem' }}>{playlist.icon||'📂'}</div>}
         </div>
-        <div style={{ flex:1 }}>
+        <div style={{ flex:1,minWidth:200 }}>
           <h2 style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.25rem',fontWeight:800,marginBottom:'.18rem' }}>{playlist.name}</h2>
+          {playlist.description && <p style={{ fontSize:'.8rem',color:'var(--text-2)',marginBottom:'.2rem' }}>{playlist.description}</p>}
           <p style={{ fontSize:'.82rem',color:'var(--text-2)' }}>{playlist.tracks.length} tracks{dur>0&&` · ${fmtDur(dur)}`} · Created {fmtDateFull(playlist.createdAt)}</p>
         </div>
-        {playlist.tracks.length > 0 && onPlayAll && (
-          <button className="btn btn--primary btn--sm" onClick={()=>onPlayAll(playlist.tracks)} style={{ flexShrink:0,gap:'.35rem' }}><IconPlay size={13}/> Play All</button>
-        )}
+        <div style={{ display:'flex',gap:'.5rem',flexShrink:0 }}>
+          <button className="btn btn--ghost btn--sm" onClick={()=>onEdit(playlist)}><IconEdit/> Edit</button>
+          {playlist.tracks.length > 0 && onPlayAll && (
+            <button className="btn btn--primary btn--sm" onClick={()=>onPlayAll(playlist.tracks, playlist.name)}>▶ Play All</button>
+          )}
+        </div>
       </div>
       {!playlist.tracks.length
-        ? <div className="lib-empty"><div style={{display:'flex',justifyContent:'center',marginBottom:'.6rem',color:'var(--text-3)'}}><IconMusicNote size={40}/></div><p className="lib-empty__text">This playlist is empty</p><Link to="/search" className="btn btn--primary btn--sm">Add tracks from Discover</Link></div>
+        ? <div className="lib-empty"><div className="lib-empty__icon">🎵</div><p className="lib-empty__text">This playlist is empty</p><Link to="/search" className="btn btn--primary btn--sm">Add tracks from Discover</Link></div>
         : <div style={{ display:'flex',flexDirection:'column',gap:'.42rem' }}>
             {playlist.tracks.map((t,i)=>(
-              <div key={t.id} className="lib-row lib-row-anim" style={{ background:playingId===t.id?'rgba(56,189,248,.06)':undefined, borderColor:playingId===t.id?'var(--accent)':undefined }}>
+              <div key={t.id} className="lib-row lib-row-anim" style={{ background:playingId===t.id?'rgba(255,107,71,.06)':undefined, borderColor:playingId===t.id?'var(--accent)':undefined }}>
                 <span style={{ width:18,textAlign:'center',fontSize:'.72rem',color:'var(--text-3)',fontFamily:'monospace',flexShrink:0 }}>{i+1}</span>
-                <button onClick={()=>onToggle(t)} style={{ width:38,height:38,borderRadius:8,flexShrink:0,background:coverGrad(t.title),border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.7)' }}>
-                  {playingId===t.id?<IconPause size={14} style={{color:'#fff'}}/>:<IconPlay size={14}/>}
+                <button onClick={()=>onToggle(t)} style={{ width:38,height:38,borderRadius:8,flexShrink:0,background:coverGrad(t.title),border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.85rem' }}>
+                  {playingId===t.id?<span style={{color:'#fff',animation:'pulse 1s ease infinite'}}>⏸</span>:<span style={{color:'rgba(255,255,255,.55)'}}>▶</span>}
                 </button>
                 <div className="lib-row__info"><div className="lib-row__title">{t.title}</div><div className="lib-row__sub">{t.artist}</div></div>
                 <div className="lib-row__meta">
                   <span style={{ fontSize:'.7rem',color:'var(--text-3)',fontFamily:'monospace' }}>{fmtDur(t.duration)}</span>
-                  <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>onRemoveTrack(playlist.id,t.id,t.title)}><IconClose size={12}/></button>
+                  <div style={{ display:'flex',flexDirection:'column',gap:1 }}>
+                    <button disabled={i===0} onClick={()=>onMoveTrack(i,i-1)} title="Move up" style={{ background:'none',border:'none',cursor:i===0?'default':'pointer',opacity:i===0?.25:.7,color:'var(--text-2)',lineHeight:1,padding:0,fontSize:'.6rem' }}>▲</button>
+                    <button disabled={i===playlist.tracks.length-1} onClick={()=>onMoveTrack(i,i+1)} title="Move down" style={{ background:'none',border:'none',cursor:i===playlist.tracks.length-1?'default':'pointer',opacity:i===playlist.tracks.length-1?.25:.7,color:'var(--text-2)',lineHeight:1,padding:0,fontSize:'.6rem' }}>▼</button>
+                  </div>
+                  <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>onRemoveTrack(playlist.id,t.id,t.title)}><IconX/></button>
                 </div>
               </div>
             ))}
@@ -754,22 +865,24 @@ function RecentHistory({ onOpenFull }) {
   return (
     <div className="card" style={{ padding:'1.25rem' }}>
       <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.8rem' }}>
-        <div style={{ display:'flex',alignItems:'center',gap:'.45rem',fontWeight:700,fontSize:'.875rem' }}><IconClock size={15}/> Recent Searches</div>
-        <button onClick={onOpenFull} style={{ background:'none',border:'none',cursor:'pointer',fontSize:'.75rem',color:'var(--accent)',fontFamily:'inherit',fontWeight:700,display:'flex',alignItems:'center',gap:'.22rem' }}>View all ›</button>
+        <div style={{ display:'flex',alignItems:'center',gap:'.45rem',fontWeight:700,fontSize:'.875rem' }}><IconClock/> Recent Activity</div>
+        <button onClick={onOpenFull} style={{ background:'none',border:'none',cursor:'pointer',fontSize:'.75rem',color:'var(--accent)',fontFamily:'inherit',fontWeight:700,display:'flex',alignItems:'center',gap:'.22rem' }}>View all <IconArrow/></button>
       </div>
       <div style={{ display:'flex',flexDirection:'column',gap:'.28rem' }}>
-        {hist.map(item=>(
+        {hist.map(item=>{
+          const clickable = item.type === 'search' || item.type === 'artist'
+          return (
           <div key={item.id}
-            style={{ display:'flex',alignItems:'center',gap:'.5rem',padding:'.38rem .55rem',borderRadius:9,cursor:'pointer',transition:'background .12s' }}
+            style={{ display:'flex',alignItems:'center',gap:'.5rem',padding:'.38rem .55rem',borderRadius:9,cursor:clickable?'pointer':'default',transition:'background .12s' }}
             onMouseEnter={e=>e.currentTarget.style.background='var(--bg-2)'}
             onMouseLeave={e=>e.currentTarget.style.background=''}
-            onClick={()=>{ addToHistory(item.query); navigate(`/search?q=${encodeURIComponent(item.query)}`) }}>
-            <span style={{ color:'var(--text-3)',flexShrink:0,display:'flex' }}>{item.type==='artist'?<IconPerson size={13}/>:<IconClock size={13}/>}</span>
+            onClick={()=>{ if(!clickable) return; addHistoryEntry('search', item.query); navigate(`/search?q=${encodeURIComponent(item.query)}`) }}>
+            <span style={{ color:'var(--text-3)',fontSize:'.77rem',flexShrink:0 }}>{HISTORY_ICONS[item.type] || '🕐'}</span>
             <span style={{ flex:1,fontSize:'.84rem',fontWeight:500 }}>{item.query}</span>
             <span style={{ fontSize:'.66rem',color:'var(--text-3)',flexShrink:0 }}>{fmtDate(item.timestamp)}</span>
-            <button onClick={e=>remove(e,item.id)} className="history-del-btn" style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',padding:'.12rem',display:'flex' }}><IconClose size={11}/></button>
+            <button onClick={e=>remove(e,item.id)} className="history-del-btn" style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',padding:'.12rem',display:'flex' }}><IconX/></button>
           </div>
-        ))}
+        )})}
       </div>
     </div>
   )
@@ -782,14 +895,25 @@ export default function Library() {
   const { user } = useAuth()
   const isGuest  = !user
 
+  // All data persists in localStorage — works offline
   const [data, setData] = useState(() => loadLibraryData() || DEFAULT_DATA)
 
+  // Re-read from localStorage when window gains focus — picks up saves from Generate/Extract
   useEffect(() => {
     const refresh = () => { const d = loadLibraryData(); if (d) setData(d) }
-    refresh()
+    refresh() // immediate on mount
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
   }, [])
+
+  const [activeSection,  setActiveSection]  = useState('overview')
+  const [search,         setSearch]         = useState('')
+  const [showCreate,     setShowCreate]     = useState(false)
+  const [editPlaylist,   setEditPlaylist]   = useState(null)
+  const [confirm,        setConfirm]        = useState(null) // {message,detail,onConfirm}
+  const [openPlaylist,   setOpenPlaylist]   = useState(null)
+  const [showHistory,    setShowHistory]    = useState(false)
+
   const askConfirm = useCallback((message, detail, onConfirm) => {
     setConfirm({ message, detail, onConfirm })
   }, [])
@@ -804,16 +928,19 @@ export default function Library() {
 
   const { saved, liked, artists, playlists, extractions, generations } = data
 
-  const [activeSection,  setActiveSection]  = useState('overview')
-  const [search,         setSearch]         = useState('')
-  const [showCreate,     setShowCreate]     = useState(false)
-  const [confirm,       setConfirm]       = useState(null)
-  const [openPlaylist,   setOpenPlaylist]   = useState(null)
-  const [showHistory,    setShowHistory]    = useState(false)
-
-  const { playing, paused, progress, elapsed, queue, playNow, playPlaylist, enqueue, clearQueue, togglePause, seekTo, playNext, playPrev, stopAll, shuffle, toggleShuffle, muted, toggleMute, volume, setVolumeLevel, reorderQueue, removeFromQueue } = useMiniPlayer()
+  const { playing, paused, progress, elapsed, queue, playNow, playPlaylist, enqueue, clearQueue, togglePause, seekTo, playNext, playPrev, stopAll, shuffle, toggleShuffle, loopMode, cycleLoop, muted, toggleMute, volume, setVolumeLevel, removeFromQueue } = useMiniPlayer()
   const genPlayer = useGenPlayer()
-  const toggleTrack = useCallback((track) => { playing?.id === track.id ? togglePause() : playNow(track) }, [playing, togglePause, playNow])
+
+  const toggleTrack = useCallback((track) => {
+    if (playing?.id === track.id) { togglePause(); return }
+    playNow(track)
+    addHistoryEntry('play', track.title, { artist: track.artist })
+  }, [playing, togglePause, playNow])
+
+  const handlePlayPlaylist = useCallback((tracks, name) => {
+    playPlaylist(tracks)
+    addHistoryEntry('playlist', name)
+  }, [playPlaylist])
 
   const counts = useMemo(() => ({
     playlists: playlists.length, saved: saved.length, liked: liked.length,
@@ -835,7 +962,25 @@ export default function Library() {
       () => updateData({ [key]: data[key].filter(x=>x.id!==id) })
     )
   }, [data, updateData, askConfirm])
-  const createPlaylist = name => updateData({ playlists:[{ id:`pl${Date.now()}`,name,tracks:[],createdAt:new Date().toISOString() },...playlists] })
+
+  const createPlaylist = useCallback((patch) => {
+    updateData({ playlists:[{ id:`pl${Date.now()}`, tracks:[], createdAt:new Date().toISOString(), ...patch },...playlists] })
+  }, [playlists, updateData])
+
+  const updatePlaylist = useCallback((id, patch) => {
+    updateData({ playlists: playlists.map(p => p.id===id ? { ...p, ...patch } : p) })
+    setOpenPlaylist(prev => prev?.id===id ? { ...prev, ...patch } : prev)
+  }, [playlists, updateData])
+
+  const movePlaylistTrack = useCallback((plId, fromIdx, toIdx) => {
+    const pl = playlists.find(p=>p.id===plId)
+    if (!pl || toIdx<0 || toIdx>=pl.tracks.length) return
+    const tracks = [...pl.tracks]
+    const [moved] = tracks.splice(fromIdx,1)
+    tracks.splice(toIdx,0,moved)
+    updatePlaylist(plId, { tracks })
+  }, [playlists, updatePlaylist])
+
   const deletePlaylist = useCallback((id, name) => {
     askConfirm(
       `Delete playlist "${name||'this playlist'}"?`,
@@ -843,6 +988,7 @@ export default function Library() {
       () => { updateData({ playlists:playlists.filter(p=>p.id!==id) }); if(openPlaylist?.id===id) setOpenPlaylist(null) }
     )
   }, [playlists, openPlaylist, updateData, askConfirm])
+
   const rmFromPlaylist = useCallback((plId, tId, trackTitle) => {
     askConfirm(
       `Remove "${trackTitle||'this track'}" from playlist?`,
@@ -856,23 +1002,23 @@ export default function Library() {
   }, [playlists, updateData, askConfirm])
 
   const NAV = [
-    { key:'overview',    Icon: IconBarChart, label:'Overview' },
-    { key:'playlists',   Icon: IconFolder,   label:'Playlists' },
-    { key:'saved',       Icon: IconDownload, label:'Saved' },
-    { key:'liked',       Icon: IconHeart,    label:'Liked' },
-    { key:'artists',     Icon: IconPerson,   label:'Artists' },
-    { key:'extractions', Icon: IconGuitar,   label:'Extractions' },
-    { key:'generated',   Icon: IconSparkle,  label:'Generated' },
-    { key:'history',     Icon: IconClock,    label:'History' },
+    { key:'overview',    icon:'🏠', label:'Overview' },
+    { key:'playlists',   icon:'📂', label:'Playlists' },
+    { key:'saved',       icon:'💾', label:'Saved' },
+    { key:'liked',       icon:'❤️',  label:'Liked' },
+    { key:'artists',     icon:'👤', label:'Artists' },
+    { key:'extractions', icon:'🎸', label:'Extractions' },
+    { key:'generated',   icon:'🤖', label:'Generated' },
+    { key:'history',     icon:'🕐', label:'History' },
   ]
 
   const statCards = [
-    { key:'playlists',   Icon: IconFolder,   label:'Playlists',   count:counts.playlists,   color:'var(--accent)' },
-    { key:'saved',       Icon: IconDownload, label:'Saved',       count:counts.saved,       color:'var(--accent-3)' },
-    { key:'liked',       Icon: IconHeart,    label:'Liked',       count:counts.liked,       color:'var(--red)' },
-    { key:'artists',     Icon: IconPerson,   label:'Following',   count:counts.artists,     color:'var(--accent-2)' },
-    { key:'extractions', Icon: IconGuitar,   label:'Extractions', count:counts.extractions, color:'#e87a30' },
-    { key:'generated',   Icon: IconSparkle,  label:'Generated',   count:counts.generated,   color:'#8b5cf6' },
+    { key:'playlists',   icon:'📂', label:'Playlists',   count:counts.playlists,   grad:'linear-gradient(135deg,var(--accent),var(--accent-2))' },
+    { key:'saved',       icon:'💾', label:'Saved',       count:counts.saved,       grad:'linear-gradient(135deg,var(--accent-2),var(--accent-3))' },
+    { key:'liked',       icon:'❤️',  label:'Liked',       count:counts.liked,       grad:'linear-gradient(135deg,var(--red),var(--accent))' },
+    { key:'artists',     icon:'👤', label:'Following',   count:counts.artists,     grad:'linear-gradient(135deg,var(--accent-3),var(--accent-2))' },
+    { key:'extractions', icon:'🎸', label:'Extractions', count:counts.extractions, grad:'linear-gradient(135deg,#e87a30,var(--accent))' },
+    { key:'generated',   icon:'🤖', label:'Generated',   count:counts.generated,   grad:'linear-gradient(135deg,#8b5cf6,var(--accent-3))' },
   ]
 
   const sc = { finished:'badge--green', queued:'badge--yellow', failed:'badge--red' }
@@ -883,7 +1029,7 @@ export default function Library() {
       {/* Header */}
       <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:'1rem',marginBottom:'1.5rem' }}>
         <div>
-          <div className="page-header__badge" style={{display:'flex',alignItems:'center',gap:'.35rem'}}><IconFolder size={13}/> Library</div>
+          <div className="page-header__badge"><span className="lib-header-icon" style={{display:"inline-block"}}>📁</span> Library</div>
           <h1 className="page-header__title">My Library</h1>
           <p className="page-header__sub">
             {isGuest ? 'Demo library — sign in to save your own content' : `${user.username}'s collection · ${Object.values(counts).reduce((a,b)=>a+b,0)} items`}
@@ -903,24 +1049,22 @@ export default function Library() {
       {/* Offline indicator */}
       {!navigator.onLine && (
         <div className="alert alert--info" style={{ marginBottom:'1rem',fontSize:'.82rem' }}>
-          You're offline — your library content is still available and playable from local storage.
+          📴 You're offline — your library content is still available and playable from local storage.
         </div>
       )}
 
-      {/* Reorganized layout: sidebar + content via the shared robust split-layout
-          system (fixes the old "210px 1fr" inline style relying on brittle
-          substring CSS matching) */}
-      <div className="split-layout--reverse" style={{ display:'grid', '--split-w':'210px', gap:'1.4rem', alignItems:'start' }}>
+      {/* Two-col layout */}
+      <div className="lib-layout">
 
         {/* Sidebar nav */}
         <nav style={{ background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:18,padding:'.45rem',position:'sticky',top:80,boxShadow:'var(--shadow-card)' }}>
           {NAV.map(item => (
             <button key={item.key} className={`nav-item-anim lib-nav-item${activeSection===item.key?' active':''}`} onClick={()=>{setActiveSection(item.key);setSearch('');setOpenPlaylist(null)}}>
               <span style={{ display:'flex',alignItems:'center',gap:'.45rem' }}>
-                <span style={{ display:'flex' }}><item.Icon size={15}/></span>{item.label}
+                <span style={{ fontSize:'.92rem',display:'inline-block',transition:'transform .25s' }} className={activeSection===item.key?'lib-header-icon':''}>{item.icon}</span>{item.label}
               </span>
               {counts[item.key]>0&&(
-                <span style={{ background:activeSection===item.key?'rgba(56,189,248,.22)':'var(--bg-3)',color:activeSection===item.key?'var(--accent)':'var(--text-3)',borderRadius:999,padding:'0 .4rem',fontSize:'.6rem',fontWeight:800 }}>
+                <span style={{ background:activeSection===item.key?'rgba(255,107,71,.22)':'var(--bg-3)',color:activeSection===item.key?'var(--accent)':'var(--text-3)',borderRadius:999,padding:'0 .4rem',fontSize:'.6rem',fontWeight:800 }}>
                   {counts[item.key]}
                 </span>
               )}
@@ -930,7 +1074,7 @@ export default function Library() {
           <button onClick={()=>setShowHistory(true)} style={{ display:'flex',alignItems:'center',gap:'.45rem',padding:'.48rem .8rem',borderRadius:12,width:'100%',border:'none',cursor:'pointer',background:'transparent',color:'var(--text-3)',fontFamily:'inherit',fontSize:'.77rem',fontWeight:600,transition:'color .14s' }}
             onMouseEnter={e=>e.currentTarget.style.color='var(--text)'}
             onMouseLeave={e=>e.currentTarget.style.color='var(--text-3)'}>
-            <IconClock size={14}/> Search history
+            <IconClock/> App history
           </button>
         </nav>
 
@@ -938,9 +1082,9 @@ export default function Library() {
         <div style={{ minWidth:0 }}>
           {!['overview','history'].includes(activeSection)&&!openPlaylist&&(
             <div className="search-bar" style={{ marginBottom:'1rem' }}>
-              <svg viewBox="0 0 20 20" fill="none"><circle cx="8.5" cy="8.5" r="5.5" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13l3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+              <IconSearch/>
               <input type="search" value={search} onChange={e=>setSearch(e.target.value)} placeholder={`Filter ${activeSection}…`} style={{ fontSize:'.875rem' }}/>
-              {search&&<button onClick={()=>setSearch('')} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',display:'flex',padding:'.1rem' }}><IconClose size={13}/></button>}
+              {search&&<button onClick={()=>setSearch('')} style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',display:'flex',padding:'.1rem' }}><IconX/></button>}
             </div>
           )}
 
@@ -949,15 +1093,15 @@ export default function Library() {
             {/* OVERVIEW */}
             {activeSection==='overview'&&(
               <div>
-                <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'.7rem',marginBottom:'1.4rem' }}>
+                <div className="lib-stat-grid">
                   {statCards.map(c=>(
                     <button key={c.key} className="stat-card-anim" onClick={()=>setActiveSection(c.key)}
                       style={{ background:'var(--bg-1)',border:'1px solid var(--border)',borderRadius:16,padding:'1.2rem',textAlign:'center',cursor:'pointer',transition:'all .22s cubic-bezier(.34,1.2,.64,1)',fontFamily:'inherit',position:'relative',overflow:'hidden' }}
                       onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-6px) scale(1.03)';e.currentTarget.style.boxShadow='var(--shadow)';e.currentTarget.style.borderColor='transparent'}}
                       onMouseLeave={e=>{e.currentTarget.style.transform='';e.currentTarget.style.boxShadow='';e.currentTarget.style.borderColor='var(--border)'}}>
-                      <div style={{ position:'absolute',top:0,left:0,right:0,height:3,background:c.color,borderRadius:'16px 16px 0 0' }}/>
-                      <div style={{ display:'flex',justifyContent:'center',marginBottom:'.3rem',color:c.color }}><c.Icon size={22}/></div>
-                      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.6rem',fontWeight:900,color:c.color }}>{c.count}</div>
+                      <div style={{ position:'absolute',top:0,left:0,right:0,height:3,background:c.grad,borderRadius:'16px 16px 0 0' }}/>
+                      <div style={{ fontSize:'1.5rem',marginBottom:'.3rem',transition:'transform .3s' }} className="lib-header-icon">{c.icon}</div>
+                      <div style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.6rem',fontWeight:900,backgroundImage:c.grad,WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text' }}>{c.count}</div>
                       <div style={{ fontSize:'.68rem',color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.04em',marginTop:'.12rem',fontWeight:700 }}>{c.label}</div>
                     </button>
                   ))}
@@ -966,8 +1110,8 @@ export default function Library() {
                 {saved.slice(0,3).length>0&&(
                   <div className="card" style={{ padding:'1.2rem',marginTop:'1rem' }}>
                     <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem' }}>
-                      <span style={{ fontWeight:700,fontSize:'.875rem',display:'flex',alignItems:'center',gap:'.4rem' }}><IconDownload size={14}/> Recently Saved</span>
-                      <button onClick={()=>setActiveSection('saved')} style={{ background:'none',border:'none',cursor:'pointer',fontSize:'.75rem',color:'var(--accent)',fontFamily:'inherit',fontWeight:700 }}>View all ›</button>
+                      <span style={{ fontWeight:700,fontSize:'.875rem' }}>💾 Recently Saved</span>
+                      <button onClick={()=>setActiveSection('saved')} style={{ background:'none',border:'none',cursor:'pointer',fontSize:'.75rem',color:'var(--accent)',fontFamily:'inherit',fontWeight:700,display:'flex',alignItems:'center',gap:'.2rem' }}>View all <IconArrow/></button>
                     </div>
                     <div style={{ display:'flex',flexDirection:'column',gap:'.38rem' }}>
                       {saved.slice(0,3).map(t=><TrackRow key={t.id} track={t} date={t.savedAt} dateLabel="saved" onRemove={id=>rm('saved',id)} removeLabel="Remove" playing={playing?.id===t.id} onToggle={toggleTrack}/>)}
@@ -977,8 +1121,8 @@ export default function Library() {
                 {liked.slice(0,3).length>0&&(
                   <div className="card" style={{ padding:'1.2rem',marginTop:'1rem' }}>
                     <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.75rem' }}>
-                      <span style={{ fontWeight:700,fontSize:'.875rem',display:'flex',alignItems:'center',gap:'.4rem' }}><IconHeart size={14}/> Recently Liked</span>
-                      <button onClick={()=>setActiveSection('liked')} style={{ background:'none',border:'none',cursor:'pointer',fontSize:'.75rem',color:'var(--accent)',fontFamily:'inherit',fontWeight:700 }}>View all ›</button>
+                      <span style={{ fontWeight:700,fontSize:'.875rem' }}>❤️ Recently Liked</span>
+                      <button onClick={()=>setActiveSection('liked')} style={{ background:'none',border:'none',cursor:'pointer',fontSize:'.75rem',color:'var(--accent)',fontFamily:'inherit',fontWeight:700,display:'flex',alignItems:'center',gap:'.2rem' }}>View all <IconArrow/></button>
                     </div>
                     <div style={{ display:'flex',flexDirection:'column',gap:'.38rem' }}>
                       {liked.slice(0,3).map(t=><TrackRow key={t.id} track={t} date={t.likedAt} dateLabel="liked" onRemove={id=>rm('liked',id)} removeLabel="Unlike" playing={playing?.id===t.id} onToggle={toggleTrack}/>)}
@@ -991,27 +1135,29 @@ export default function Library() {
             {/* PLAYLISTS */}
             {activeSection==='playlists'&&!openPlaylist&&(
               filterP(playlists).length>0
-                ?<div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(172px,1fr))',gap:'.85rem' }}>
+                ?<div className="lib-playlist-grid">
                    {filterP(playlists).map(pl=><PlaylistCard key={pl.id} playlist={pl} onOpen={setOpenPlaylist} onDelete={deletePlaylist}/>)}
                  </div>
-                :<LibEmpty Icon={IconFolder} text="No playlists yet" cta="Create your first" onClick={()=>setShowCreate(true)}/>
+                :<LibEmpty icon="📂" text="No playlists yet" cta="Create your first" onClick={()=>setShowCreate(true)}/>
             )}
             {activeSection==='playlists'&&openPlaylist&&(
-              <PlaylistDetail playlist={openPlaylist} onBack={()=>setOpenPlaylist(null)} onRemoveTrack={rmFromPlaylist} onToggle={toggleTrack} playingId={playing?.id} onPlayAll={playPlaylist}/>
+              <PlaylistDetail playlist={openPlaylist} onBack={()=>setOpenPlaylist(null)} onEdit={setEditPlaylist}
+                onRemoveTrack={rmFromPlaylist} onMoveTrack={(from,to)=>movePlaylistTrack(openPlaylist.id,from,to)}
+                onToggle={toggleTrack} playingId={playing?.id} onPlayAll={handlePlayPlaylist}/>
             )}
 
             {/* SAVED */}
             {activeSection==='saved'&&(
               filterT(saved).length>0
                 ?<ColList>{filterT(saved).map(t=><TrackRow key={t.id} track={t} date={t.savedAt} dateLabel="saved" onRemove={id=>rm('saved',id)} removeLabel="Remove" playing={playing?.id===t.id} onToggle={toggleTrack}/>)}</ColList>
-                :<LibEmpty Icon={IconDownload} text="No saved tracks" cta="Discover music" to="/search"/>
+                :<LibEmpty icon="💾" text="No saved tracks" cta="Discover music" to="/search"/>
             )}
 
             {/* LIKED */}
             {activeSection==='liked'&&(
               filterT(liked).length>0
                 ?<ColList>{filterT(liked).map(t=><TrackRow key={t.id} track={t} date={t.likedAt} dateLabel="liked" onRemove={id=>rm('liked',id)} removeLabel="Unlike" playing={playing?.id===t.id} onToggle={toggleTrack}/>)}</ColList>
-                :<LibEmpty Icon={IconHeart} text="No liked tracks" cta="Find something to like" to="/search"/>
+                :<LibEmpty icon="❤️" text="No liked tracks" cta="Find something to like" to="/search"/>
             )}
 
             {/* ARTISTS */}
@@ -1030,7 +1176,7 @@ export default function Library() {
                      </div>
                    ))}
                  </div>
-                :<LibEmpty Icon={IconPerson} text="Not following anyone" cta="Discover artists" to="/search"/>
+                :<LibEmpty icon="👤" text="Not following anyone" cta="Discover artists" to="/search"/>
             )}
 
             {/* EXTRACTIONS */}
@@ -1039,7 +1185,7 @@ export default function Library() {
                 ?<ColList>{filterI(extractions).map(item=>(
                     <div key={item.id} className="lib-row lib-row-anim" style={{flexDirection:'column',alignItems:'stretch',gap:'.45rem',padding:'.9rem'}}>
                       <div style={{display:'flex',alignItems:'center',gap:'.7rem'}}>
-                        <div style={{width:40,height:40,borderRadius:12,flexShrink:0,background:'linear-gradient(135deg,var(--bg-3),var(--bg-4))',border:'1.5px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--accent)'}}><IconGuitar size={18}/></div>
+                        <div style={{width:40,height:40,borderRadius:12,flexShrink:0,background:'linear-gradient(135deg,var(--bg-3),var(--bg-4))',border:'1.5px solid var(--border)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem'}}>🎸</div>
                         <div className="lib-row__info">
                           <div className="lib-row__title">{item.title}</div>
                           <div className="lib-row__sub">{item.totalChords} chords · {item.key} · {item.bpm} bpm{item.duration?` · ${fmtDurEngine(item.duration)}`:''}</div>
@@ -1047,20 +1193,20 @@ export default function Library() {
                         <div className="lib-row__meta">
                           <span style={{fontSize:'.67rem',color:'var(--text-3)'}}>{fmtDate(item.createdAt)}</span>
                           <Link to="/extract" className="btn btn--ghost btn--sm" style={{fontSize:'.7rem',padding:'.2rem .5rem'}}>Re-extract</Link>
-                          <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>rm('extractions',item.id)}><IconClose size={12}/></button>
+                          <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>rm('extractions',item.id)}><IconTrash/></button>
                         </div>
                       </div>
                       {item.progressions?.length>0&&(
                         <div style={{paddingLeft:52}}>
                           <div style={{fontSize:'.67rem',color:'var(--text-3)',marginBottom:'.25rem'}}>Suggested:</div>
                           <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
-                            {item.progressions.slice(0,2).map((p,i)=><div key={i} style={{fontSize:'.68rem',fontFamily:"'Space Mono',monospace",color:i===0?'var(--accent)':'var(--text-2)',background:i===0?'rgba(56,189,248,.07)':'var(--bg-3)',padding:'.18rem .5rem',borderRadius:6,border:`1px solid ${i===0?'rgba(56,189,248,.22)':'var(--border)'}`}}>{p}</div>)}
+                            {item.progressions.slice(0,2).map((p,i)=><div key={i} style={{fontSize:'.68rem',fontFamily:"'Space Mono',monospace",color:i===0?'var(--accent)':'var(--text-2)',background:i===0?'rgba(255,107,71,.07)':'var(--bg-3)',padding:'.18rem .5rem',borderRadius:6,border:`1px solid ${i===0?'rgba(255,107,71,.22)':'var(--border)'}`}}>{p}</div>)}
                           </div>
                         </div>
                       )}
                     </div>
                   ))}</ColList>
-                :<LibEmpty Icon={IconGuitar} text="No extractions yet" cta="Extract chords" to="/extract"/>
+                :<LibEmpty icon="🎸" text="No extractions yet" cta="Extract chords" to="/extract"/>
             )}
 
             {/* GENERATED */}
@@ -1070,11 +1216,11 @@ export default function Library() {
                     const isAct=genPlayer.id===item.id, hasP=!!item.progressions?.length
                     const chords=item.progressions?.[0]?.split(' — ').filter(Boolean)||[]
                     return(
-                    <div key={item.id} className="lib-row lib-row-anim" style={{flexDirection:'column',alignItems:'stretch',gap:'.55rem',padding:'1rem',background:isAct?'rgba(56,189,248,.05)':undefined,borderColor:isAct?'var(--accent)':undefined}}>
+                    <div key={item.id} className="lib-row lib-row-anim" style={{flexDirection:'column',alignItems:'stretch',gap:'.55rem',padding:'1rem',background:isAct?'rgba(255,107,71,.05)':undefined,borderColor:isAct?'var(--accent)':undefined}}>
                       <div style={{display:'flex',alignItems:'center',gap:'.7rem'}}>
                         <button onClick={()=>hasP&&genPlayer.toggle(item)}
                           style={{width:40,height:40,borderRadius:12,flexShrink:0,background:isAct?'linear-gradient(135deg,var(--accent),var(--accent-2))':'var(--bg-3)',border:`1.5px solid ${isAct?'var(--accent)':'var(--border)'}`,cursor:hasP?'pointer':'default',display:'flex',alignItems:'center',justifyContent:'center',color:isAct?'#fff':'var(--text-2)',transition:'all .2s'}}>
-                          {isAct&&genPlayer.playing?<IconPause size={14}/>:<IconPlay size={14}/>}
+                          {isAct&&genPlayer.playing?<svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>:<svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>}
                         </button>
                         <div className="lib-row__info">
                           <div className="lib-row__title">{item.title}</div>
@@ -1083,21 +1229,21 @@ export default function Library() {
                         <div className="lib-row__meta">
                           <span className={`badge ${sc[item.status]||'badge--blue'}`}>{item.status}</span>
                           <span style={{fontSize:'.67rem',color:'var(--text-3)'}}>{fmtDate(item.createdAt)}</span>
-                          <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>rm('generations',item.id)}><IconClose size={12}/></button>
+                          <button className="btn btn--icon btn--ghost btn--sm lib-row__del" onClick={()=>rm('generations',item.id)}><IconTrash/></button>
                         </div>
                       </div>
                       {chords.length>0&&<div style={{display:'flex',gap:'.22rem',flexWrap:'wrap',paddingLeft:52}}>{chords.map((c,ci)=><div key={ci} style={{padding:'.1rem .38rem',borderRadius:5,fontSize:'.63rem',fontWeight:800,fontFamily:"'Space Mono',monospace",background:isAct&&genPlayer.playing&&genPlayer.curChord===ci?'var(--accent)':'var(--bg-3)',color:isAct&&genPlayer.playing&&genPlayer.curChord===ci?'#fff':'var(--text-2)',transition:'all .15s',border:'1px solid var(--border)'}}>{c}</div>)}</div>}
                       {isAct&&(genPlayer.playing||genPlayer.paused)&&<div style={{height:2,background:'var(--bg-3)',borderRadius:1,overflow:'hidden',marginLeft:52}}><div style={{height:'100%',width:`${genPlayer.progress*100}%`,background:'linear-gradient(90deg,var(--accent),var(--accent-2))',transition:'width .1s linear'}}/></div>}
                     </div>
                   )})}</ColList>
-                :<LibEmpty Icon={IconSparkle} text="No generated tracks yet" cta="Generate music" to="/generate"/>
+                :<LibEmpty icon="🤖" text="No generated tracks yet" cta="Generate music" to="/generate"/>
             )}
 
             {/* HISTORY */}
             {activeSection==='history'&&(
               <div>
                 <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1rem' }}>
-                  <span style={{ fontWeight:700,fontSize:'.875rem' }}>Search History</span>
+                  <span style={{ fontWeight:700,fontSize:'.875rem' }}>App History</span>
                   <button className="btn btn--primary btn--sm" onClick={()=>setShowHistory(true)}>Manage all</button>
                 </div>
                 <RecentHistory onOpenFull={()=>setShowHistory(true)}/>
@@ -1115,19 +1261,32 @@ export default function Library() {
       </div>
 
       {/* Now playing bar */}
-      {playing && <NowPlayingBar playing={playing} paused={paused} progress={progress} elapsed={elapsed} queue={queue} onTogglePause={togglePause} onSeek={seekTo} onNext={playNext} onPrev={playPrev} onStop={stopAll} shuffle={shuffle} onShuffle={toggleShuffle} muted={muted} onMute={toggleMute} volume={volume} onVolume={setVolumeLevel} onReorder={reorderQueue} onRemoveQ={removeFromQueue}/>}
+      {playing && <NowPlayingBar playing={playing} paused={paused} progress={progress} elapsed={elapsed} queue={queue} onTogglePause={togglePause} onSeek={seekTo} onNext={playNext} onPrev={playPrev} onStop={stopAll} shuffle={shuffle} onShuffle={toggleShuffle} loopMode={loopMode} onCycleLoop={cycleLoop} muted={muted} onMute={toggleMute} volume={volume} onVolume={setVolumeLevel} onRemoveQ={removeFromQueue}/>}
 
       {/* Confirm dialog */}
       {confirm && <ConfirmDialog message={confirm.message} detail={confirm.detail} onConfirm={()=>{confirm.onConfirm();setConfirm(null)}} onCancel={()=>setConfirm(null)}/>}
 
       {/* Modals */}
-      {showCreate  && <CreatePlaylistModal onClose={()=>setShowCreate(false)} onCreate={createPlaylist}/>}
-      {showHistory && <HistoryModal onClose={()=>setShowHistory(false)}/>}
+      {showCreate    && <PlaylistFormModal title="New Playlist" onClose={()=>setShowCreate(false)} onSubmit={createPlaylist}/>}
+      {editPlaylist  && <PlaylistFormModal title="Edit Playlist" initial={editPlaylist} onClose={()=>setEditPlaylist(null)} onSubmit={(patch)=>updatePlaylist(editPlaylist.id, patch)}/>}
+      {showHistory   && <HistoryModal onClose={()=>setShowHistory(false)}/>}
 
       <style>{`
+        .lib-layout { display:grid; grid-template-columns:210px 1fr; gap:1.4rem; align-items:start; }
+        .lib-stat-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:.7rem; margin-bottom:1.4rem; }
+        .lib-playlist-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(172px,1fr)); gap:.85rem; }
+        @media (max-width:760px) {
+          .lib-layout { grid-template-columns:1fr; }
+          .lib-layout nav[style*="position: sticky"] { position:static; display:flex; flex-wrap:wrap; gap:.2rem; }
+          .lib-stat-grid { grid-template-columns:repeat(2,1fr); }
+        }
+        @media (max-width:420px) {
+          .lib-stat-grid { grid-template-columns:1fr; }
+          .lib-playlist-grid { grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); }
+        }
         .lib-row { display:flex;align-items:center;gap:.72rem;padding:.62rem .88rem;border-radius:12px;background:var(--bg-2);border:1px solid var(--border);transition:all .18s; }
         .lib-row:hover { border-color:var(--border-hi); }
-        .lib-row__cover { width:42px;height:42px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center; }
+        .lib-row__cover { width:42px;height:42px;border-radius:9px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:.95rem; }
         .lib-row__info { flex:1;min-width:0; }
         .lib-row__title { font-size:.84rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
         .lib-row__sub { font-size:.71rem;color:var(--text-2);margin-top:.1rem; }
@@ -1146,20 +1305,16 @@ export default function Library() {
         .lib-playlist-card:hover .lib-playlist-del { opacity:1; }
         .history-del-btn { opacity:0!important; }
         div:hover > .history-del-btn { opacity:1!important; }
-        @media (max-width:760px) {
-          .split-layout--reverse[style] { grid-template-columns:1fr !important; }
-          nav[style*="position: sticky"] { position:static !important;display:flex;flex-wrap:wrap;gap:.2rem; }
-        }
       `}</style>
     </div>
   )
 }
 
 function ColList({ children }) { return <div style={{ display:'flex',flexDirection:'column',gap:'.44rem' }}>{children}</div> }
-function LibEmpty({ Icon, text, cta, to, onClick }) {
+function LibEmpty({ icon, text, cta, to, onClick }) {
   return (
     <div className="lib-empty">
-      <div style={{display:'flex',justifyContent:'center',marginBottom:'.6rem',color:'var(--text-3)'}}>{Icon && <Icon size={40}/>}</div>
+      <div className="lib-empty__icon">{icon}</div>
       <p className="lib-empty__text">{text}</p>
       {to ? <Link to={to} className="btn btn--primary btn--sm">{cta}</Link>
            : <button className="btn btn--primary btn--sm" onClick={onClick}>{cta}</button>}

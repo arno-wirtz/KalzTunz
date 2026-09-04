@@ -1,54 +1,49 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
-import { useSpotify } from '../hooks/useSpotify'
+import { useMusicLibrary } from '../hooks/useMusicLibrary'
+import { loadHistory as loadAllHistory, saveHistory, addHistoryEntry } from '../utils/musicEngine'
 
-/* ── localStorage history helpers (shared with Library) ── */
-const HISTORY_KEY = 'kalztunz_search_history'
+/* ── History helpers — reads from the shared app-history log in
+   musicEngine.js but only ever shows/writes 'search' and 'artist'
+   entries here; Library's History section shows the full unified feed
+   (plays, extractions, generations, playlists included). ──────────── */
 function loadHistory() {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]') } catch { return [] }
+  return loadAllHistory().filter(h => h.type === 'search' || h.type === 'artist')
 }
-function saveHistory(h) { localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, 50))) }
 function addToHistory(query, type = 'search') {
-  const history = loadHistory()
-  const entry   = { id: Date.now(), query, type, timestamp: new Date().toISOString() }
-  const deduped = history.filter(h => h.query.toLowerCase() !== query.toLowerCase())
-  saveHistory([entry, ...deduped])
+  addHistoryEntry(type, query)
 }
 
-/* ── Trending searches by category ───────────────────────── */
+/* ── Trending searches — drawn entirely from our own seed catalog ───── */
 const TRENDING = {
   'track,artist,album': [
-    { query:'Taylor Swift',       type:'artist', icon:'🔥' },
-    { query:'The Weeknd',         type:'artist', icon:'🔥' },
-    { query:'Billie Eilish',      type:'artist', icon:'📈' },
-    { query:'Ed Sheeran',         type:'artist', icon:'📈' },
-    { query:'Kendrick Lamar',     type:'artist', icon:'🔥' },
-    { query:'jazz piano 2024',    type:'search', icon:'🎹' },
-    { query:'lo-fi chill beats',  type:'search', icon:'🎧' },
-    { query:'classical guitar',   type:'search', icon:'🎸' },
+    { query:'Nova Rhodes',        type:'artist', icon:'🔥' },
+    { query:'Vector Pulse',       type:'artist', icon:'🔥' },
+    { query:'Kasper Lowe',        type:'artist', icon:'📈' },
+    { query:'Golden Hour',        type:'search', icon:'🎵' },
+    { query:'jazz',               type:'search', icon:'🎹' },
+    { query:'ambient',            type:'search', icon:'🎧' },
+    { query:'Concrete Wings',     type:'search', icon:'🎸' },
   ],
   track: [
-    { query:'Blinding Lights',    type:'search', icon:'🔥' },
-    { query:'Levitating',         type:'search', icon:'📈' },
-    { query:'As It Was',          type:'search', icon:'🔥' },
-    { query:'Flowers',            type:'search', icon:'📈' },
-    { query:'Cruel Summer',       type:'search', icon:'🔥' },
-    { query:'Starboy',            type:'search', icon:'📈' },
+    { query:'Golden Hour',        type:'search', icon:'🔥' },
+    { query:'Synaptic',           type:'search', icon:'📈' },
+    { query:'Voltage',            type:'search', icon:'🔥' },
+    { query:'Velvet Hours',       type:'search', icon:'📈' },
+    { query:'Ember March',        type:'search', icon:'🔥' },
   ],
   artist: [
-    { query:'Drake',              type:'artist', icon:'🔥' },
-    { query:'Bad Bunny',          type:'artist', icon:'🔥' },
-    { query:'The Beatles',        type:'artist', icon:'🎸' },
-    { query:'Ariana Grande',      type:'artist', icon:'📈' },
-    { query:'Post Malone',        type:'artist', icon:'📈' },
-    { query:'Adele',              type:'artist', icon:'🎤' },
+    { query:'Nova Rhodes',            type:'artist', icon:'🔥' },
+    { query:'Crimson Static',         type:'artist', icon:'🔥' },
+    { query:'Simone Ardor',           type:'artist', icon:'📈' },
+    { query:'Marlowe & the Foxes',    type:'artist', icon:'📈' },
+    { query:'Aria Wentworth',         type:'artist', icon:'🎻' },
   ],
   album: [
-    { query:'Midnights Taylor Swift',  type:'search', icon:'🔥' },
-    { query:'After Hours The Weeknd',  type:'search', icon:'📈' },
-    { query:'Scorpion Drake',          type:'search', icon:'📈' },
-    { query:'Renaissance Beyoncé',     type:'search', icon:'🔥' },
-    { query:'Harry\'s House',          type:'search', icon:'📈' },
+    { query:'Golden Hour',        type:'search', icon:'🔥' },
+    { query:'Low Gravity',        type:'search', icon:'📈' },
+    { query:'Hollow Crown',       type:'search', icon:'📈' },
+    { query:'Drift Hour',         type:'search', icon:'🔥' },
   ],
 }
 
@@ -57,27 +52,25 @@ const MOODS = [
   { key:'happy',     label:'Happy',     emoji:'😊', color:'#f59e0b', bg:'rgba(245,158,11,.12)' },
   { key:'sad',       label:'Sad',       emoji:'😢', color:'#7c5ce7', bg:'rgba(124,92,231,.12)' },
   { key:'energetic', label:'Energetic', emoji:'⚡', color:'#ef4444', bg:'rgba(239,68,68,.12)' },
-  { key:'chill',     label:'Chill',     emoji:'😌', color:'#00d4aa', bg:'rgba(0,212,170,.12)' },
+  { key:'calm',      label:'Chill',     emoji:'😌', color:'#00d4aa', bg:'rgba(0,212,170,.12)' },
   { key:'romantic',  label:'Romantic',  emoji:'💕', color:'#ec4899', bg:'rgba(236,72,153,.12)' },
-  { key:'focus',     label:'Focus',     emoji:'🎯', color:'#8b5cf6', bg:'rgba(139,92,246,.12)' },
+  { key:'mysterious',label:'Mysterious',emoji:'🔮', color:'#8b5cf6', bg:'rgba(139,92,246,.12)' },
   { key:'dark',      label:'Dark',      emoji:'🌑', color:'#64748b', bg:'rgba(100,116,139,.12)' },
   { key:'epic',      label:'Epic',      emoji:'🔥', color:'#dc2626', bg:'rgba(220,38,38,.12)' },
-  { key:'morning',   label:'Morning',   emoji:'🌅', color:'#f97316', bg:'rgba(249,115,22,.12)' },
+  { key:'uplifting', label:'Uplifting', emoji:'🌅', color:'#f97316', bg:'rgba(249,115,22,.12)' },
 ]
 
 const GENRE_BROWSE = [
-  { label:'Pop',        emoji:'🎤', color:'#f59e0b', query:'pop hits' },
-  { label:'Hip-Hop',    emoji:'🎧', color:'#8b5cf6', query:'hip hop' },
-  { label:'Rock',       emoji:'🎸', color:'#ef4444', query:'rock anthems' },
-  { label:'Jazz',       emoji:'🎷', color:'#d4a017', query:'jazz piano' },
-  { label:'R&B',        emoji:'💜', color:'#ec4899', query:'rnb soul' },
-  { label:'Electronic', emoji:'🎛️', color:'#00d4aa', query:'electronic dance' },
-  { label:'Classical',  emoji:'🎻', color:'#6366f1', query:'classical orchestra' },
-  { label:'Indie',      emoji:'🌿', color:'#22c55e', query:'indie alternative' },
-  { label:'Country',    emoji:'🤠', color:'#d97706', query:'country hits' },
-  { label:'Afrobeats',  emoji:'🥁', color:'#f97316', query:'afrobeats' },
-  { label:'Latin',      emoji:'💃', color:'#f43f5e', query:'latin reggaeton' },
-  { label:'K-Pop',      emoji:'⭐', color:'#a855f7', query:'kpop' },
+  { label:'Pop',        emoji:'🎤', color:'#f59e0b', genre:'pop' },
+  { label:'Hip-Hop',    emoji:'🎧', color:'#8b5cf6', genre:'hip-hop' },
+  { label:'Rock',       emoji:'🎸', color:'#ef4444', genre:'rock' },
+  { label:'Jazz',       emoji:'🎷', color:'#d4a017', genre:'jazz' },
+  { label:'R&B',        emoji:'💜', color:'#ec4899', genre:'rnb' },
+  { label:'Electronic', emoji:'🎛️', color:'#00d4aa', genre:'electronic' },
+  { label:'Classical',  emoji:'🎻', color:'#6366f1', genre:'classical' },
+  { label:'Indie',      emoji:'🌿', color:'#22c55e', genre:'indie' },
+  { label:'Country',    emoji:'🤠', color:'#d97706', genre:'country' },
+  { label:'Ambient',    emoji:'🌌', color:'#0ea5e9', genre:'ambient' },
 ]
 
 const SEARCH_TYPES = [
@@ -105,77 +98,146 @@ const placeholderCover = name => {
   return `linear-gradient(135deg,hsl(${h},55%,18%),hsl(${(h+50)%360},45%,28%))`
 }
 
-/* ── Cover ───────────────────────────────────────────────── */
-function Cover({ src, alt, size=56, radius=8, style={} }) {
-  const [err, setErr] = useState(false)
-  if (!src||err) return <div style={{ width:size,height:size,borderRadius:radius,flexShrink:0,background:placeholderCover(alt||''),display:'flex',alignItems:'center',justifyContent:'center',fontSize:size>48?'1.4rem':'.9rem',...style }}>🎵</div>
-  return <img src={src} alt={alt} onError={()=>setErr(true)} style={{ width:size,height:size,borderRadius:radius,objectFit:'cover',flexShrink:0,display:'block',...style }}/>
+/* ── Chord preview engine ─────────────────────────────────────
+   Every seed track carries a musical `key` (e.g. "G major"). Since
+   there's no external audio source, we synthesize a short sustained
+   triad from that key with the Web Audio API — a real, on-brand audio
+   preview instead of a dead link to a third-party player. ──────── */
+const KEY_FREQS = { C:261.63,'C#':277.18,D:293.66,'D#':311.13,E:329.63,F:349.23,'F#':369.99,G:392,'G#':415.3,A:440,'A#':466.16,B:493.88 }
+const PREVIEW_SECONDS = 18
+
+function chordFreqsForKey(keyStr) {
+  const [root, mode] = (keyStr || 'C major').split(' ')
+  const base = KEY_FREQS[root] || KEY_FREQS.C
+  const step = n => base * Math.pow(2, n / 12)
+  return mode === 'minor' ? [base/2, base, step(3), step(7)] : [base/2, base, step(4), step(7)]
+}
+
+function usePreviewPlayer() {
+  const ctxRef  = useRef(null)
+  const gainRef = useRef(null)
+  const tmrRef  = useRef(null)
+  const startRef= useRef(0)
+  const pausedAtRef = useRef(0)
+  const [playingId, setPlayingId] = useState(null)
+  const [paused,     setPaused]   = useState(false)
+  const [elapsed,    setElapsed]  = useState(0)
+  const [progress,   setProgress] = useState(0)
+
+  const clearTimer = () => { if (tmrRef.current) { clearInterval(tmrRef.current); tmrRef.current = null } }
+
+  const stop = useCallback(() => {
+    clearTimer()
+    if (ctxRef.current) { try { ctxRef.current.close() } catch {} ctxRef.current = null }
+    gainRef.current = null
+    setPlayingId(null); setPaused(false); setElapsed(0); setProgress(0)
+    pausedAtRef.current = 0
+  }, [])
+
+  const start = useCallback((track, fromSeconds = 0) => {
+    stop()
+    if (!track) return
+    const remaining = PREVIEW_SECONDS - fromSeconds
+    if (remaining <= 0) return
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      ctxRef.current = ctx
+      const gain = ctx.createGain()
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.4)
+      gain.gain.setValueAtTime(0.16, ctx.currentTime + remaining - 1.2)
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + remaining)
+      gain.connect(ctx.destination)
+      gainRef.current = gain
+      chordFreqsForKey(track.key).forEach((f, i) => {
+        const osc = ctx.createOscillator()
+        osc.type = i === 0 ? 'sine' : 'triangle'
+        osc.frequency.setValueAtTime(f, ctx.currentTime)
+        osc.connect(gain)
+        osc.start(ctx.currentTime)
+        osc.stop(ctx.currentTime + remaining)
+      })
+      const startedAt = Date.now() - fromSeconds * 1000
+      startRef.current = startedAt
+      setPlayingId(track.id); setPaused(false)
+      tmrRef.current = setInterval(() => {
+        const el = Math.min((Date.now() - startedAt) / 1000, PREVIEW_SECONDS)
+        setElapsed(el); setProgress(el / PREVIEW_SECONDS)
+        if (el >= PREVIEW_SECONDS) stop()
+      }, 100)
+    } catch { /* Web Audio unavailable — silently no-op */ }
+  }, [stop])
+
+  const pause = useCallback(() => {
+    clearTimer()
+    pausedAtRef.current = elapsed
+    if (ctxRef.current?.state === 'running') ctxRef.current.suspend().catch(()=>{})
+    setPaused(true)
+  }, [elapsed])
+
+  const resume = useCallback((track) => {
+    if (ctxRef.current?.state === 'suspended') {
+      ctxRef.current.resume().then(() => {
+        const startedAt = Date.now() - pausedAtRef.current * 1000
+        startRef.current = startedAt
+        tmrRef.current = setInterval(() => {
+          const el = Math.min((Date.now() - startedAt) / 1000, PREVIEW_SECONDS)
+          setElapsed(el); setProgress(el / PREVIEW_SECONDS)
+          if (el >= PREVIEW_SECONDS) stop()
+        }, 100)
+      }).catch(()=>{})
+      setPaused(false)
+    } else {
+      start(track, pausedAtRef.current)
+    }
+  }, [start, stop])
+
+  const toggle = useCallback((track) => {
+    if (playingId === track.id && !paused) pause()
+    else if (playingId === track.id && paused) resume(track)
+    else start(track, 0)
+  }, [playingId, paused, pause, resume, start])
+
+  useEffect(() => () => stop(), [stop])
+
+  return { playingId, paused, elapsed, progress, toggle, stop, duration: PREVIEW_SECONDS }
 }
 
 /* ── Now Playing Bar ─────────────────────────────────────── */
-function NowPlayingBar({ track, onClose }) {
-  const [playing, setPlaying] = useState(true)
-  const [elapsed, setElapsed] = useState(0)
-  const audioRef = useRef(null)
-  const timerRef = useRef(null)
-  const dur = track?.duration || Math.floor((track?.duration_ms||0)/1000) || 30
-
-  useEffect(() => {
-    setElapsed(0); setPlaying(true)
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
-    if (track?.preview_url) {
-      const audio = new Audio(track.preview_url)
-      audio.play().catch(()=>{})
-      audioRef.current = audio
-      audio.onended = () => setPlaying(false)
-    }
-    return () => { audioRef.current?.pause(); clearInterval(timerRef.current) }
-  }, [track?.id])
-
-  useEffect(() => {
-    clearInterval(timerRef.current)
-    if (playing && track) {
-      timerRef.current = setInterval(() => {
-        setElapsed(e => { const n=e+1; if(n>=dur){clearInterval(timerRef.current);setPlaying(false)} return n })
-      }, 1000)
-    }
-    return () => clearInterval(timerRef.current)
-  }, [playing, track])
-
+function NowPlayingBar({ track, player, onClose }) {
   if (!track) return null
-  const pct = dur > 0 ? (elapsed/dur)*100 : 0
+  const isThis = player.playingId === track.id
+  const pct = (player.progress || 0) * 100
 
   return (
     <div className="now-playing-bar">
       <Cover src={track.cover} alt={track.title} size={40} radius={7} />
       <div className="np-info"><div className="np-title">{track.title}</div><div className="np-artist">{track.artist}</div></div>
       <div className="np-controls">
-        <button className="np-btn np-play" onClick={() => {
-          if (!audioRef.current) return
-          if (playing) { audioRef.current.pause(); setPlaying(false) }
-          else         { audioRef.current.play().catch(()=>{}); setPlaying(true) }
-        }}>
-          {playing
+        <button className="np-btn np-play" onClick={() => player.toggle(track)}>
+          {isThis && !player.paused
             ? <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
             : <svg width={13} height={13} viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>}
         </button>
       </div>
       <div className="np-progress-wrap">
-        <span className="np-time">{fmtDur(elapsed*1000)}</span>
-        <div className="np-bar" onClick={e=>{const pct=e.nativeEvent.offsetX/e.currentTarget.offsetWidth;setElapsed(Math.round(pct*dur))}}>
-          <div className="np-bar-fill" style={{ width:`${pct}%` }}/>
-        </div>
-        <span className="np-time">{fmtDur(dur*1000)}</span>
+        <span className="np-time">{fmtDur((isThis?player.elapsed:0)*1000)}</span>
+        <div className="np-bar"><div className="np-bar-fill" style={{ width:`${isThis?pct:0}%` }}/></div>
+        <span className="np-time">{fmtDur(player.duration*1000)}</span>
       </div>
-      {track.preview_url
-        ? <span style={{ fontSize:'.65rem',color:'var(--cyan)',flexShrink:0 }}>▶ 30s preview</span>
-        : <a href={track.external_url} target="_blank" rel="noreferrer" className="btn btn--ghost btn--sm" style={{ flexShrink:0,fontSize:'.72rem' }}>Open Spotify ↗</a>
-      }
+      <span style={{ fontSize:'.65rem',color:'var(--text-3)',flexShrink:0 }}>♪ Preview · {track.key}</span>
       <button className="np-close" onClick={onClose}>
         <svg width={15} height={15} viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
       </button>
     </div>
   )
+}
+
+/* ── Cover ───────────────────────────────────────────────── */
+function Cover({ src, alt, size=56, radius=8, style={} }) {
+  const [err, setErr] = useState(false)
+  if (!src||err) return <div style={{ width:size,height:size,borderRadius:radius,flexShrink:0,background:placeholderCover(alt||''),display:'flex',alignItems:'center',justifyContent:'center',fontSize:size>48?'1.4rem':'.9rem',...style }}>🎵</div>
+  return <img src={src} alt={alt} onError={()=>setErr(true)} style={{ width:size,height:size,borderRadius:radius,objectFit:'cover',flexShrink:0,display:'block',...style }}/>
 }
 
 /* ── Album Row (inside ArtistModal) ─────────────────────── */
@@ -193,7 +255,6 @@ function AlbumRow({ al, albumTracks, loadingAlb, loadAlbumTracks, onPlay, TrackR
           </div>
         </div>
         <div style={{ display:'flex',gap:'.4rem',flexShrink:0 }}>
-          <button className="btn btn--ghost btn--sm" onClick={e=>{e.stopPropagation();onPlay({id:al.id,title:al.title,artist:al.artist,cover:al.cover,preview_url:null,external_url:al.external_url})}}>▶ Play</button>
           <span style={{ color:'var(--text-3)',fontSize:'.8rem',display:'flex',alignItems:'center' }}>{open?'▲':'▼'}</span>
         </div>
       </div>
@@ -208,19 +269,18 @@ function AlbumRow({ al, albumTracks, loadingAlb, loadAlbumTracks, onPlay, TrackR
 }
 
 /* ── Artist Profile Modal ────────────────────────────────── */
-function ArtistModal({ artistId, onClose, onPlay, liked, onLike }) {
-  const { getArtist, getArtistAlbums, getArtistTopTracks, getAlbum } = useSpotify()
+function ArtistModal({ artistId, onClose, onPlay, player, liked, onLike }) {
+  const { getArtist, getArtistAlbums, getArtistTopTracks, getAlbum } = useMusicLibrary()
   const [artist,     setArtist]     = useState(null)
   const [albums,     setAlbums]     = useState([])
   const [topTracks,  setTopTracks]  = useState([])
   const [albumTracks,setAlbumTracks]= useState({})
   const [modalTab,   setModalTab]   = useState('top')
   const [loadingAlb, setLoadingAlb] = useState(null)
-  const [followed,   setFollowed]   = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([getArtist(artistId), getArtistAlbums(artistId, 20), getArtistTopTracks(artistId)]).then(([aR, alR, tR]) => {
+    Promise.all([getArtist(artistId), getArtistAlbums(artistId), getArtistTopTracks(artistId)]).then(([aR, alR, tR]) => {
       if (cancelled) return
       if (aR)  setArtist(aR.artist)
       if (alR) setAlbums(alR.albums || [])
@@ -264,7 +324,7 @@ function ArtistModal({ artistId, onClose, onPlay, liked, onLike }) {
         <button onClick={e=>{e.stopPropagation();onLike(t.id)}} style={{ background:'none',border:'none',cursor:'pointer',color:liked.has(t.id)?'var(--accent-err)':'var(--text-3)',padding:'.2rem',display:'flex' }}>
           <svg width={13} height={13} viewBox="0 0 24 24" fill={liked.has(t.id)?'currentColor':'none'} stroke="currentColor" strokeWidth={2}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         </button>
-        <span style={{ fontSize:'.7rem',color:'var(--text-3)',fontFamily:'monospace',minWidth:32,textAlign:'right' }}>{fmtDur(t.duration_ms||(t.duration||0)*1000)}</span>
+        <span style={{ fontSize:'.7rem',color:'var(--text-3)',fontFamily:'monospace',minWidth:32,textAlign:'right' }}>{fmtDur((t.duration||0)*1000)}</span>
       </div>
     </div>
   )
@@ -272,27 +332,17 @@ function ArtistModal({ artistId, onClose, onPlay, liked, onLike }) {
   return (
     <div className="artist-modal-backdrop" onClick={onClose}>
       <div className="artist-modal" onClick={e=>e.stopPropagation()}>
-        <div className="artist-modal__header" style={{ backgroundImage:`url(${artist.image})`,backgroundSize:'cover',backgroundPosition:'center top' }}>
-          <div style={{ position:'absolute',inset:0,background:'linear-gradient(to top,rgba(0,0,0,.85) 0%,rgba(0,0,0,.3) 100%)' }}/>
+        <div className="artist-modal__header" style={{ background:bgGrad }}>
           <button className="artist-modal__close" onClick={onClose}>
             <svg width={15} height={15} viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
           </button>
           <div style={{ position:'relative',zIndex:1,display:'flex',alignItems:'flex-end',gap:'.85rem',width:'100%' }}>
-            <div className="artist-modal__avatar" style={{ background:bgGrad }}>
-              {artist.image ? <img src={artist.image} alt={artist.name} style={{ width:'100%',height:'100%',objectFit:'cover',borderRadius:'50%' }}/> : artist.name?.charAt(0)}
+            <div className="artist-modal__avatar" style={{ background:'rgba(0,0,0,.25)' }}>
+              {artist.name?.charAt(0)}
             </div>
             <div className="artist-modal__info" style={{ flex:1,minWidth:0 }}>
-              <div className="artist-modal__name">{artist.name}<span style={{ marginLeft:'.4rem',color:'#1DB954',fontSize:'.8rem' }}>✓ Spotify</span></div>
-              <div className="artist-modal__stats">{fmtNum(artist.followers||0)} followers{artist.genres?.length>0&&` · ${artist.genres.slice(0,2).join(', ')}`}</div>
-            </div>
-            <div style={{ display:'flex',gap:'.5rem',flexShrink:0 }}>
-              <button onClick={()=>setFollowed(f=>!f)} style={{ padding:'.38rem .9rem',borderRadius:20,border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.8rem',transition:'all .2s',background:followed?'rgba(255,255,255,.15)':'#1DB954',color:'#fff' }}>
-                {followed?'Following ✓':'+ Follow'}
-              </button>
-              {artist.external_url && <a href={artist.external_url} target="_blank" rel="noreferrer" style={{ display:'flex',alignItems:'center',gap:'.3rem',padding:'.38rem .7rem',borderRadius:20,background:'rgba(29,185,84,.15)',border:'1px solid rgba(29,185,84,.35)',color:'#1DB954',textDecoration:'none',fontSize:'.75rem',fontWeight:700 }}>
-                <svg width={12} height={12} viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-                Spotify
-              </a>}
+              <div className="artist-modal__name">{artist.name}</div>
+              <div className="artist-modal__stats">{fmtNum(artist.followers||0)} followers{artist.genres?.length>0&&` · ${artist.genres.join(', ')}`}</div>
             </div>
           </div>
         </div>
@@ -379,7 +429,7 @@ function ArtistCard({ artist, onClick }) {
         }
       </div>
       <div style={{ flex:1,minWidth:0 }}>
-        <div className="artist-card__name">{artist.name} <span style={{ color:'#1DB954',fontSize:'.72rem' }}>✓</span></div>
+        <div className="artist-card__name">{artist.name}</div>
         <div className="artist-card__meta">{fmtNum(artist.followers)} followers</div>
         {artist.genres?.length>0&&<div style={{ fontSize:'.7rem',color:'var(--text-3)',marginTop:'.15rem' }} className="truncate">{artist.genres.slice(0,3).join(' · ')}</div>}
       </div>
@@ -405,22 +455,6 @@ function AlbumCard({ album, onClick }) {
           <span>{album.release_date?.slice(0,4)}</span>
           <span>{album.total_tracks} tracks</span>
           <span style={{ textTransform:'capitalize' }}>{album.album_type}</span>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ── Spotify not configured banner ───────────────────────── */
-function SpotifyBanner() {
-  return (
-    <div style={{ background:'linear-gradient(135deg,rgba(29,185,84,.08),rgba(29,185,84,.04))',border:'1px solid rgba(29,185,84,.25)',borderRadius:14,padding:'1.5rem',marginBottom:'1.5rem' }}>
-      <div style={{ display:'flex',gap:'1rem',alignItems:'flex-start',flexWrap:'wrap' }}>
-        <svg width={36} height={36} viewBox="0 0 24 24" fill="#1DB954" style={{ flexShrink:0 }}><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/></svg>
-        <div style={{ flex:1 }}>
-          <div style={{ fontWeight:800,fontSize:'.95rem',marginBottom:'.4rem',color:'#1DB954' }}>Connect Spotify to unlock real music data</div>
-          <p style={{ fontSize:'.82rem',color:'var(--text-2)',lineHeight:1.6,marginBottom:'.85rem' }}>Add <code style={{ background:'var(--bg-3)',padding:'0 .3rem',borderRadius:4,fontSize:'.78rem' }}>SPOTIFY_CLIENT_ID</code> and <code style={{ background:'var(--bg-3)',padding:'0 .3rem',borderRadius:4,fontSize:'.78rem' }}>SPOTIFY_CLIENT_SECRET</code> to your .env</p>
-          <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer" className="btn btn--primary btn--sm" style={{ background:'#1DB954',borderColor:'#1DB954' }}>Get Free API Keys →</a>
         </div>
       </div>
     </div>
@@ -457,13 +491,15 @@ function SkeletonRow() {
 export default function Search() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const spotify  = useSpotify()
+  const library  = useMusicLibrary()
+  const player   = usePreviewPlayer()
 
   const [inputVal,   setInputVal]   = useState(searchParams.get('q') || '')
   const [query,      setQuery]      = useState(searchParams.get('q') || '')
   const [searchType, setSearchType] = useState('track,artist,album')
   const [mood,       setMood]       = useState(null)
   const [activeMood, setActiveMood] = useState(null)
+  const [activeGenre,setActiveGenre]= useState(null)
   const [showMoreGenres, setShowMoreGenres] = useState(false)
   const [showMoreMoods,  setShowMoreMoods]  = useState(false)
 
@@ -476,7 +512,6 @@ export default function Search() {
   const [saved,      setSaved]      = useState(new Set())
   const [nowPlaying, setNowPlaying] = useState(null)
   const [artistModal,setArtistModal]= useState(null)
-  const [configured, setConfigured] = useState(true)
   const [firstLoad,  setFirstLoad]  = useState(true)
 
   // Search dropdown state
@@ -499,26 +534,23 @@ export default function Search() {
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
+  // Featured tracks on first load
   useEffect(() => {
-    spotify.checkStatus().then(res => { if (res) setConfigured(res.ok) })
-  }, [])
-
-  useEffect(() => {
-    if (!configured || !firstLoad || query) return
+    if (!firstLoad || query) return
     setFirstLoad(false)
-    spotify.getFeatured(20).then(res => { if (res?.tracks) { setTracks(res.tracks); setTab('tracks') } })
-  }, [configured, firstLoad, query])
+    library.getFeatured(20).then(res => { if (res?.tracks) { setTracks(res.tracks); setTab('tracks') } })
+  }, [firstLoad, query])
 
-  // Re-run search when searchType changes (user changed type filter while query is active)
+  // Re-run search when searchType changes
   useEffect(() => {
-    if (!query || !configured) return
-    spotify.searchSpotify(query, searchType, 30).then(res => {
+    if (!query) return
+    library.searchLibrary(query, searchType, 30).then(res => {
       if (!res) return
       if (res.tracks)  setTracks(res.tracks)
       if (res.artists) setArtists(res.artists)
       if (res.albums)  setAlbums(res.albums)
     })
-  }, [searchType])  // Only re-fire when type changes, not on every query change
+  }, [searchType])
 
   useEffect(() => {
     const q = searchParams.get('q') || ''
@@ -540,20 +572,18 @@ export default function Search() {
     setSearchParams({ q: trimmed })
     setInputFocused(false)
     setTypeDropdown(false)
-    setMood(null); setActiveMood(null)
-    // Fire search immediately instead of waiting for useEffect to re-run
-    const res = await spotify.searchSpotify(trimmed, type, 30)
+    setMood(null); setActiveMood(null); setActiveGenre(null)
+    const res = await library.searchLibrary(trimmed, type, 30)
     if (!res) return
     if (res.tracks)  setTracks(res.tracks)
     if (res.artists) setArtists(res.artists)
     if (res.albums)  setAlbums(res.albums)
-    // Auto-switch tab to most relevant result
     if (type === 'artist')      setTab('artists')
     else if (type === 'album')  setTab('albums')
     else if (res.tracks?.length)  setTab('tracks')
     else if (res.artists?.length) setTab('artists')
     else if (res.albums?.length)  setTab('albums')
-  }, [searchType, spotify])
+  }, [searchType, library])
 
   const handleSearchSubmit = e => {
     e.preventDefault()
@@ -563,30 +593,36 @@ export default function Search() {
 
   const clearSearch = () => {
     setInputVal(''); setQuery(''); setSearchParams({})
-    setMood(null); setActiveMood(null); setFirstLoad(true)
+    setMood(null); setActiveMood(null); setActiveGenre(null); setFirstLoad(true)
     inputRef.current?.focus()
   }
 
   const handleMood = useCallback(async m => {
     if (activeMood === m.key) { setMood(null); setActiveMood(null); setFirstLoad(true); return }
-    setActiveMood(m.key); setQuery(''); setInputVal(''); setSearchParams({})
-    const res = await spotify.getMoodTracks(m.key, 24)
+    setActiveMood(m.key); setActiveGenre(null); setQuery(''); setInputVal(''); setSearchParams({})
+    const res = await library.getMoodTracks(m.key, 24)
     if (res?.tracks) { setTracks(res.tracks); setTab('tracks') }
     setMood(m)
-  }, [activeMood])
+  }, [activeMood, library])
+
+  const handleGenre = useCallback(async g => {
+    if (activeGenre === g.genre) { setActiveGenre(null); setFirstLoad(true); return }
+    setActiveGenre(g.genre); setActiveMood(null); setMood(null); setQuery(''); setInputVal(''); setSearchParams({})
+    const res = await library.getGenreTracks(g.genre, 24)
+    if (res?.tracks) { setTracks(res.tracks); setTab('tracks') }
+  }, [activeGenre, library])
 
   const toggleLike = useCallback(id => { setLiked(p=>{ const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n }) }, [])
   const toggleSave = useCallback(id => { setSaved(p=>{ const n=new Set(p); n.has(id)?n.delete(id):n.add(id); return n }) }, [])
   const openArtist = useCallback((id, name) => { if (id) setArtistModal({ id, name }) }, [])
 
-  const loading = spotify.loading
+  const loading = library.loading
 
   // Items to show in input dropdown: history OR trending
   const showDropdown = inputFocused && !query
   const dropdownItems = useMemo(() => {
     const q = inputVal.trim().toLowerCase()
     if (q) {
-      // Filter history by input
       return { type:'filtered', items: loadHistory().filter(h=>h.query.toLowerCase().includes(q)).slice(0,6) }
     }
     if (localHistory.length > 0) {
@@ -605,15 +641,13 @@ export default function Search() {
       <div className="page-header" style={{ marginBottom:'1.25rem' }}>
         <div className="page-header__badge">🔍 Discover</div>
         <h1 className="page-header__title">Find Music & Artists</h1>
-        <p className="page-header__sub">Powered by Spotify · Search tracks, artists & albums · Browse by mood</p>
+        <p className="page-header__sub">Search the KalzTunz music library · Browse by genre or mood · Play a short chord preview of anything</p>
       </div>
-
-      {!configured && <SpotifyBanner />}
 
       {/* ── Search bar with dropdown ── */}
       <div style={{ position:'relative',marginBottom:'1.1rem' }} ref={dropdownRef}>
         <form onSubmit={handleSearchSubmit}>
-          <div className="search-bar" style={{ borderRadius: showDropdown || (inputVal && dropdownItems.items.length>0) ? '16px 16px 0 0' : 16 }}>
+          <div className="search-bar kt-search-row" style={{ borderRadius: showDropdown || (inputVal && dropdownItems.items.length>0) ? '16px 16px 0 0' : 16 }}>
             {/* Type selector */}
             <div ref={typeRef} style={{ position:'relative',flexShrink:0 }}>
               <button
@@ -636,7 +670,7 @@ export default function Search() {
                   position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:300,
                   background:'var(--bg-1)',border:'1px solid var(--border-hi)',
                   borderRadius:14,padding:'.5rem',boxShadow:'var(--shadow)',
-                  minWidth:280,animation:'dropIn .18s ease',
+                  minWidth:280,maxWidth:'calc(100vw - 2.5rem)',animation:'dropIn .18s ease',
                 }}>
                   {/* Type options */}
                   <div style={{ marginBottom:'.5rem' }}>
@@ -687,7 +721,7 @@ export default function Search() {
               value={inputVal}
               onChange={e => setInputVal(e.target.value)}
               onFocus={() => setInputFocused(true)}
-              placeholder="Search songs, artists, albums on Spotify…"
+              placeholder="Search songs, artists, albums…"
               autoFocus={!!searchParams.get('q')}
               style={{ fontSize:'1rem' }}
             />
@@ -727,19 +761,19 @@ export default function Search() {
               <div style={{ padding:'1rem',textAlign:'center',color:'var(--text-3)',fontSize:'.82rem' }}>No matches</div>
             ) : (
               dropdownItems.items.map((item, i) => {
-                const query  = item.query || item.label || ''
+                const q  = item.query || item.label || ''
                 const isHist = dropdownItems.type !== 'trending'
                 return (
                   <div key={item.id || i}
                     style={{ display:'flex',alignItems:'center',gap:'.6rem',padding:'.5rem 1rem',cursor:'pointer',transition:'background .15s' }}
                     onMouseEnter={e=>e.currentTarget.style.background='var(--bg-2)'}
                     onMouseLeave={e=>e.currentTarget.style.background='transparent'}
-                    onClick={() => { setInputVal(query); executeSearch(query) }}
+                    onClick={() => { setInputVal(q); executeSearch(q) }}
                   >
                     <span style={{ fontSize:'.82rem',flexShrink:0,color:'var(--text-3)' }}>
                       {isHist ? (item.type==='artist'?'👤':'🕐') : item.icon}
                     </span>
-                    <span style={{ flex:1,fontSize:'.875rem',fontWeight:500 }}>{query}</span>
+                    <span style={{ flex:1,fontSize:'.875rem',fontWeight:500 }}>{q}</span>
                     {isHist && item.timestamp && (
                       <span style={{ fontSize:'.67rem',color:'var(--text-3)',flexShrink:0 }}>{fmtDate(item.timestamp)}</span>
                     )}
@@ -750,8 +784,11 @@ export default function Search() {
                       <button
                         onClick={e => {
                           e.stopPropagation()
-                          const h = loadHistory().filter(x=>x.id!==item.id)
-                          saveHistory(h); setLocalHistory(h.slice(0,6))
+                          // Remove only this item from the FULL shared history log —
+                          // loadHistory() here is search/artist-filtered, so we must
+                          // not save that filtered subset back as the whole log.
+                          const full = loadAllHistory().filter(x=>x.id!==item.id)
+                          saveHistory(full); setLocalHistory(loadHistory().slice(0,6))
                         }}
                         style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-3)',padding:'.15rem',flexShrink:0,opacity:.6,display:'flex' }}
                       >
@@ -792,36 +829,13 @@ export default function Search() {
         <div style={{ marginBottom:'1.4rem' }}>
           <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.6rem' }}>
             <div style={{ fontSize:'.7rem',fontWeight:700,color:'#60a5fa',textTransform:'uppercase',letterSpacing:'.06em',display:'flex',alignItems:'center',gap:'.4rem' }}><span style={{width:6,height:6,borderRadius:'50%',background:'#3b82f6',display:'inline-block'}}/>Browse by Genre</div>
-            <div style={{ position:'relative' }}>
-              <button onClick={()=>setShowMoreGenres(o=>!o)}
-                style={{ display:'flex',alignItems:'center',gap:'.3rem',padding:'.24rem .65rem',borderRadius:999,border:'1px solid var(--border-hi)',background:'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.71rem',color:'var(--text-2)',transition:'all .18s' }}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border-hi)';e.currentTarget.style.color='var(--text-2)'}}>
-                More +{GENRE_BROWSE.length-5}
-                <svg width={9} height={9} viewBox="0 0 24 24" fill="currentColor" style={{transition:'transform .2s',transform:showMoreGenres?'rotate(180deg)':'none'}}><path d="M7 10l5 5 5-5z"/></svg>
-              </button>
-              {showMoreGenres && (
-                <div style={{ position:'absolute',right:0,top:'calc(100% + 6px)',background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:16,padding:'.55rem',zIndex:60,width:240,boxShadow:'var(--shadow)',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.35rem' }}
-                  onMouseLeave={()=>setShowMoreGenres(false)}>
-                  {GENRE_BROWSE.slice(5).map(g => (
-                    <button key={g.label} onClick={()=>{ setInputVal(g.query); executeSearch(g.query); setShowMoreGenres(false) }}
-                      style={{ display:'flex',alignItems:'center',gap:'.42rem',padding:'.45rem .6rem',borderRadius:10,border:`1px solid ${g.color}33`,background:`${g.color}0d`,cursor:'pointer',fontFamily:'inherit',transition:'all .18s',textAlign:'left' }}
-                      onMouseEnter={e=>{e.currentTarget.style.background=`${g.color}20`;e.currentTarget.style.borderColor=g.color}}
-                      onMouseLeave={e=>{e.currentTarget.style.background=`${g.color}0d`;e.currentTarget.style.borderColor=`${g.color}33`}}>
-                      <span style={{ fontSize:'1.05rem' }}>{g.emoji}</span>
-                      <span style={{ fontSize:'.73rem',fontWeight:700,color:g.color }}>{g.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
-          <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'.5rem' }}>
-            {GENRE_BROWSE.slice(0,5).map(g => (
-              <button key={g.label} onClick={() => { setInputVal(g.query); executeSearch(g.query) }}
-                style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.28rem',padding:'.62rem .3rem',borderRadius:12,border:`1.5px solid ${g.color}33`,background:`${g.color}10`,cursor:'pointer',fontFamily:'inherit',transition:'all .2s' }}
-                onMouseEnter={e=>{ e.currentTarget.style.background=`${g.color}22`; e.currentTarget.style.borderColor=g.color; e.currentTarget.style.transform='translateY(-2px)' }}
-                onMouseLeave={e=>{ e.currentTarget.style.background=`${g.color}10`; e.currentTarget.style.borderColor=`${g.color}33`; e.currentTarget.style.transform='none' }}>
+          <div className="kt-genre-grid">
+            {GENRE_BROWSE.map(g => (
+              <button key={g.label} onClick={() => handleGenre(g)}
+                style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.28rem',padding:'.62rem .3rem',borderRadius:12,border:`1.5px solid ${activeGenre===g.genre?g.color:g.color+'33'}`,background:activeGenre===g.genre?`${g.color}22`:`${g.color}10`,cursor:'pointer',fontFamily:'inherit',transition:'all .2s' }}
+                onMouseEnter={e=>{ if(activeGenre!==g.genre){ e.currentTarget.style.background=`${g.color}22`; e.currentTarget.style.borderColor=g.color; e.currentTarget.style.transform='translateY(-2px)' } }}
+                onMouseLeave={e=>{ if(activeGenre!==g.genre){ e.currentTarget.style.background=`${g.color}10`; e.currentTarget.style.borderColor=`${g.color}33`; e.currentTarget.style.transform='none' } }}>
                 <span style={{ fontSize:'1.25rem' }}>{g.emoji}</span>
                 <span style={{ fontSize:'.7rem',fontWeight:700,color:g.color }}>{g.label}</span>
               </button>
@@ -843,7 +857,7 @@ export default function Search() {
               <svg width={9} height={9} viewBox="0 0 24 24" fill="currentColor" style={{transition:'transform .2s',transform:showMoreMoods?'rotate(180deg)':'none'}}><path d="M7 10l5 5 5-5z"/></svg>
             </button>
             {showMoreMoods && (
-              <div style={{ position:'absolute',right:0,top:'calc(100% + 6px)',background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:14,padding:'.5rem',zIndex:60,minWidth:185,boxShadow:'var(--shadow)',display:'flex',flexDirection:'column',gap:'.28rem' }}
+              <div style={{ position:'absolute',right:0,top:'calc(100% + 6px)',background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:14,padding:'.5rem',zIndex:60,minWidth:185,maxWidth:'calc(100vw - 2.5rem)',boxShadow:'var(--shadow)',display:'flex',flexDirection:'column',gap:'.28rem' }}
                 onMouseLeave={()=>setShowMoreMoods(false)}>
                 {MOODS.slice(5).map(m => (
                   <button key={m.key} onClick={()=>{ handleMood(m); setShowMoreMoods(false) }} disabled={loading}
@@ -867,15 +881,14 @@ export default function Search() {
         </div>
       </div>
 
-
       {/* ── Filter row ── */}
-      <div style={{ display:'flex',alignItems:'center',gap:'.6rem',flexWrap:'wrap',marginBottom:'1.25rem' }}>
-        <div style={{ display:'flex',background:'var(--bg-2)',border:'1px solid var(--border)',borderRadius:12,padding:3,gap:2 }}>
+      <div className="kt-filter-row" style={{ display:'flex',alignItems:'center',gap:'.6rem',marginBottom:'1.25rem' }}>
+        <div style={{ display:'flex',background:'var(--bg-2)',border:'1px solid var(--border)',borderRadius:12,padding:3,gap:2,flexShrink:0 }}>
           {[['tracks',`🎵 Tracks`,tracks.length],['artists',`👤 Artists`,artists.length],['albums',`💿 Albums`,albums.length]].map(([k,l,n])=>(
             <button key={k} onClick={()=>setTab(k)} style={{
               display:'flex',alignItems:'center',gap:'.4rem',
               padding:'.32rem .85rem',borderRadius:9,border:'none',cursor:'pointer',
-              fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',transition:'all .2s',
+              fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',transition:'all .2s',whiteSpace:'nowrap',
               background:tab===k?'var(--accent)':'transparent',
               color:tab===k?'#fff':'var(--text-2)',
             }}>
@@ -884,8 +897,8 @@ export default function Search() {
             </button>
           ))}
         </div>
-        {(query || activeMood) && (
-          <button onClick={clearSearch} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.28rem .7rem',cursor:'pointer',fontSize:'.75rem',color:'var(--text-3)',fontFamily:'inherit',transition:'all .18s' }}
+        {(query || activeMood || activeGenre) && (
+          <button onClick={clearSearch} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.28rem .7rem',cursor:'pointer',fontSize:'.75rem',color:'var(--text-3)',fontFamily:'inherit',transition:'all .18s',flexShrink:0 }}
             onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.color='var(--text-3)'}}>
             ✕ Clear
@@ -894,12 +907,14 @@ export default function Search() {
       </div>
 
       {/* Error */}
-      {spotify.error && <div className="alert alert--error" style={{ marginBottom:'1rem' }}>⚠ {spotify.error}</div>}
+      {library.error && <div className="alert alert--error" style={{ marginBottom:'1rem' }}>⚠ {library.error}</div>}
 
       {/* Results header */}
       <div className="search-results-header" style={{ marginBottom:'1rem' }}>
         <h2 style={{ fontSize:'1rem',fontWeight:700 }}>
-          {mood ? `${mood.emoji} ${mood.label} Vibes` : query ? `Results for "${query}"` : 'Trending Now'}
+          {mood ? `${mood.emoji} ${mood.label} Vibes`
+            : activeGenre ? `${GENRE_BROWSE.find(g=>g.genre===activeGenre)?.emoji||''} ${GENRE_BROWSE.find(g=>g.genre===activeGenre)?.label||activeGenre}`
+            : query ? `Results for "${query}"` : 'Featured Tracks'}
         </h2>
         {loading && <span className="spinner" style={{ width:14,height:14,borderWidth:2 }}/>}
         {!loading && <span className="search-results-count">{tab==='tracks'?`${tracks.length} tracks`:tab==='artists'?`${artists.length} artists`:`${albums.length} albums`}</span>}
@@ -924,8 +939,25 @@ export default function Search() {
           : <div className="lib-empty fade-up"><div className="lib-empty__icon">💿</div><p className="lib-empty__text">{query?`No albums for "${query}"`:'Search for albums above'}</p></div>
       )}
 
-      {artistModal && <ArtistModal artistId={artistModal.id} onClose={()=>setArtistModal(null)} onPlay={t=>{setNowPlaying(t);setArtistModal(null)}} liked={liked} onLike={toggleLike}/>}
-      {nowPlaying  && <NowPlayingBar track={nowPlaying} onClose={()=>setNowPlaying(null)}/>}
+      {artistModal && <ArtistModal artistId={artistModal.id} onClose={()=>setArtistModal(null)} onPlay={t=>{setNowPlaying(t);setArtistModal(null)}} player={player} liked={liked} onLike={toggleLike}/>}
+      {nowPlaying  && <NowPlayingBar track={nowPlaying} player={player} onClose={()=>{player.stop();setNowPlaying(null)}}/>}
+
+      <style>{`
+        .kt-genre-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:.5rem; }
+        @media (max-width:720px) { .kt-genre-grid { grid-template-columns:repeat(4,1fr); } }
+        @media (max-width:480px) { .kt-genre-grid { grid-template-columns:repeat(3,1fr); } }
+        @media (max-width:360px) { .kt-genre-grid { grid-template-columns:repeat(2,1fr); } }
+
+        .kt-search-row { flex-wrap:wrap; }
+        @media (max-width:520px) {
+          .kt-search-row { padding:.55rem .7rem; gap:.5rem; }
+          .kt-search-row input { min-width:0; flex-basis:100%; order:3; }
+          .kt-search-row button[type="submit"] { order:4; margin-left:auto; }
+        }
+
+        .kt-filter-row { overflow-x:auto; -webkit-overflow-scrolling:touch; flex-wrap:nowrap; }
+        .kt-filter-row::-webkit-scrollbar { display:none; }
+      `}</style>
     </div>
   )
 }

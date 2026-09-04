@@ -1,6 +1,8 @@
 /**
- * KalzTunz Music Engine — shared by Generate, Extraction, Library
- * Chord synthesis, theory helpers, localStorage library management
+ * KalzTunz Music Engine — shared by Generate, Extraction, Library, Search
+ * Chord synthesis, theory helpers, localStorage library management,
+ * and centralized app-history tracking (searches, plays, extractions,
+ * generations, playlists — one shared log, filtered per-page).
  */
 export const CHROMATIC = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
 export const SCALE_INT = { major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], dorian:[0,2,3,5,7,9,10], mixolydian:[0,2,4,5,7,9,10], pentatonic:[0,2,4,7,9], blues:[0,3,5,6,7,10] }
@@ -52,14 +54,52 @@ const empty=()=>({saved:[],liked:[],artists:[],playlists:[],extractions:[],gener
 export const loadLibData=()=>{ try{return JSON.parse(localStorage.getItem(LS)||'null')||empty()}catch{return empty()} }
 export const saveLibData=d=>{ try{localStorage.setItem(LS,JSON.stringify(d))}catch{} }
 
+/* ════════════════════════════════════════════════════════════════
+   APP HISTORY — one shared, centralized activity log.
+   Every page writes here (search, artist view, track play, playlist
+   play, extraction saved, generation saved) so Library's "History"
+   section is a real unified app-history feed, not just search terms.
+   Individual pages can filter by `type` when they only want a subset
+   (e.g. Search's dropdown only wants type 'search'/'artist').
+   ════════════════════════════════════════════════════════════════ */
+const HISTORY_KEY = 'kalztunz_search_history'
+const HISTORY_MAX = 100
+
+export const loadHistory = () => {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]') } catch { return [] }
+}
+export const saveHistory = h => {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h.slice(0, HISTORY_MAX))) } catch {}
+}
+
+/**
+ * addHistoryEntry('search'|'artist'|'play'|'extraction'|'generation'|'playlist', label, meta?)
+ * De-duplicates by (type, label) so repeatedly playing/searching the same
+ * thing bumps it to the top instead of spamming the list.
+ */
+export function addHistoryEntry(type, label, meta = {}) {
+  if (!label) return null
+  const history = loadHistory()
+  const entry = { id: Date.now() + Math.random(), query: label, type, timestamp: new Date().toISOString(), meta }
+  const deduped = history.filter(h => !(h.type === type && h.query.toLowerCase() === label.toLowerCase()))
+  saveHistory([entry, ...deduped])
+  return entry
+}
+
+export const HISTORY_ICONS = { search:'🔍', artist:'👤', play:'▶', extraction:'🎸', generation:'🤖', playlist:'📂' }
+
 export function saveGenerationToLib(r){
   const d=loadLibData()
   const e={ id:`g${Date.now()}`, title:`${(r.genre||'generated').charAt(0).toUpperCase()+(r.genre||'generated').slice(1)} — ${r.key} ${r.mode}`, style:r.genre||'generated', key:`${r.key} ${r.mode}`, bpm:r.bpm||120, mood:r.mood||'', instruments:r.instruments||[], voiceType:r.voiceType||'', progressions:r.progressions||[], scaleRef:r.scaleRef||[], instrNotes:r.instrNotes||{}, status:'finished', createdAt:new Date().toISOString() }
-  d.generations=[e,...(d.generations||[]).filter(g=>g.id!==e.id).slice(0,49)]; saveLibData(d); return e
+  d.generations=[e,...(d.generations||[]).filter(g=>g.id!==e.id).slice(0,49)]; saveLibData(d)
+  addHistoryEntry('generation', e.title, { id: e.id })
+  return e
 }
 
 export function saveExtractionToLib(r,file){
   const d=loadLibData()
   const e={ id:`ex${Date.now()}`, title:file?.name?.replace(/\.[^.]+$/,'')||'Extraction', key:r.metadata?.key||'?', bpm:r.metadata?.bpm||0, duration:r.metadata?.duration||0, totalChords:r.chords?.length||0, progressions:r.suggested_progressions||[], createdAt:new Date().toISOString() }
-  d.extractions=[e,...(d.extractions||[]).filter(x=>x.id!==e.id).slice(0,49)]; saveLibData(d); return e
+  d.extractions=[e,...(d.extractions||[]).filter(x=>x.id!==e.id).slice(0,49)]; saveLibData(d)
+  addHistoryEntry('extraction', e.title, { id: e.id })
+  return e
 }

@@ -3,27 +3,21 @@ import { safeJson, useAuth } from '../App'
 import { Link } from 'react-router-dom'
 
 import { ChordSynth, buildLocal, buildScaleRef, fmtDur, KEY_FREQS, chordFreqs, saveGenerationToLib, CHROMATIC, SCALE_INT } from '../utils/musicEngine'
-import {
-  IconBolt, IconReplay, IconMic, IconGuitar, IconHorn, IconSliders, IconDrum, IconStrings, IconHat, IconHeart, IconCloud, IconLeaf,
-  IconSmile, IconFrown, IconWave, IconMoon, IconFlame, IconEye, IconSunrise, IconKey,
-  IconPiano, IconPerson, IconBaby, IconAngel, IconGroup, IconRobot, IconMicUp, IconMicSoft,
-  IconClose, IconCheck, IconCopy,
-} from '../components/Icons'
 
 const API = import.meta.env.VITE_API_URL ?? ''  // same-origin in production (unified service)
 
 /* ── Data ───────────────────────────────────────────────────── */
 const GENRES = [
-  { id:'pop',       label:'Pop',       Icon: IconMic,     color:'#f59e0b', desc:'Catchy, radio-friendly' },
-  { id:'rock',      label:'Rock',      Icon: IconGuitar,  color:'#ef4444', desc:'Power & attitude' },
-  { id:'jazz',      label:'Jazz',      Icon: IconHorn,    color:'#d4a017', desc:'Complex harmony' },
-  { id:'electronic',label:'Electronic',Icon: IconSliders, color:'var(--accent-3)', desc:'Synth & arpeggios' },
-  { id:'hip-hop',   label:'Hip-Hop',   Icon: IconDrum,    color:'#8b5cf6', desc:'Groove & rhythm' },
-  { id:'classical', label:'Classical', Icon: IconStrings, color:'#6366f1', desc:'Bach to Beethoven' },
-  { id:'country',   label:'Country',   Icon: IconHat,     color:'#d97706', desc:'Open tunings' },
-  { id:'rnb',       label:'R&B',       Icon: IconHeart,   color:'#ec4899', desc:'Soul & neo-soul' },
-  { id:'ambient',   label:'Ambient',   Icon: IconCloud,   color:'#0ea5e9', desc:'Floating pads' },
-  { id:'indie',     label:'Indie',     Icon: IconLeaf,    color:'#22c55e', desc:'Dreamy alt-chords' },
+  { id:'pop',       label:'Pop',       icon:'🎤', color:'#f59e0b', desc:'Catchy, radio-friendly' },
+  { id:'rock',      label:'Rock',      icon:'🎸', color:'#ef4444', desc:'Power & attitude' },
+  { id:'jazz',      label:'Jazz',      icon:'🎷', color:'#d4a017', desc:'Complex harmony' },
+  { id:'electronic',label:'Electronic',icon:'🎛️', color:'var(--accent-3)', desc:'Synth & arpeggios' },
+  { id:'hip-hop',   label:'Hip-Hop',   icon:'🥁', color:'#8b5cf6', desc:'Groove & rhythm' },
+  { id:'classical', label:'Classical', icon:'🎻', color:'#6366f1', desc:'Bach to Beethoven' },
+  { id:'country',   label:'Country',   icon:'🤠', color:'#d97706', desc:'Open tunings' },
+  { id:'rnb',       label:'R&B',       icon:'💜', color:'#ec4899', desc:'Soul & neo-soul' },
+  { id:'ambient',   label:'Ambient',   icon:'🌌', color:'#0ea5e9', desc:'Floating pads' },
+  { id:'indie',     label:'Indie',     icon:'🌿', color:'#22c55e', desc:'Dreamy alt-chords' },
 ]
 
 const GENRE_MOODS = {
@@ -39,15 +33,15 @@ const GENRE_MOODS = {
   indie:['sad','mysterious','uplifting','romantic','calm'],
 }
 const MOOD_META = {
-  happy:      { Icon: IconSmile,   color:'#f59e0b', desc:'Bright & positive' },
-  sad:        { Icon: IconFrown,   color:'#7c5ce7', desc:'Melancholic & tender' },
-  energetic:  { Icon: IconBolt,    color:'#ef4444', desc:'High-drive intensity' },
-  calm:       { Icon: IconWave,    color:'var(--accent-3)', desc:'Peaceful & serene' },
-  dark:       { Icon: IconMoon,    color:'#64748b', desc:'Tense & cinematic' },
-  romantic:   { Icon: IconHeart,   color:'#ec4899', desc:'Warm & expressive' },
-  epic:       { Icon: IconFlame,   color:'#dc2626', desc:'Grand & sweeping' },
-  mysterious: { Icon: IconEye,     color:'#8b5cf6', desc:'Ethereal & unexpected' },
-  uplifting:  { Icon: IconSunrise, color:'#f97316', desc:'Hopeful & triumphant' },
+  happy:      { icon:'😊', color:'#f59e0b', desc:'Bright & positive' },
+  sad:        { icon:'😢', color:'#7c5ce7', desc:'Melancholic & tender' },
+  energetic:  { icon:'⚡', color:'#ef4444', desc:'High-drive intensity' },
+  calm:       { icon:'😌', color:'var(--accent-3)', desc:'Peaceful & serene' },
+  dark:       { icon:'🌑', color:'#64748b', desc:'Tense & cinematic' },
+  romantic:   { icon:'💕', color:'#ec4899', desc:'Warm & expressive' },
+  epic:       { icon:'🔥', color:'#dc2626', desc:'Grand & sweeping' },
+  mysterious: { icon:'🔮', color:'#8b5cf6', desc:'Ethereal & unexpected' },
+  uplifting:  { icon:'🌅', color:'#f97316', desc:'Hopeful & triumphant' },
 }
 const SCALE_MODES = [
   { id:'major',      label:'Major',      desc:'Bright, resolved, happy' },
@@ -59,31 +53,47 @@ const SCALE_MODES = [
 ]
 const KEYS     = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B']
 const INSTRUMENTS_LIST = [
-  { id:'piano',   label:'Piano',      Icon: IconPiano },
-  { id:'guitar',  label:'Guitar',     Icon: IconGuitar },
-  { id:'bass',    label:'Bass',       Icon: IconGuitar },
-  { id:'strings', label:'Strings',    Icon: IconStrings },
-  { id:'brass',   label:'Brass/Wind', Icon: IconHorn },
-  { id:'drums',   label:'Drums',      Icon: IconDrum },
-  { id:'synth',   label:'Synth',      Icon: IconSliders },
-  { id:'vocals',  label:'Vocals',     Icon: IconMic },
+  { id:'piano',   label:'Piano',      icon:'🎹' },
+  { id:'guitar',  label:'Guitar',     icon:'🎸' },
+  { id:'bass',    label:'Bass',       icon:'🎸' },
+  { id:'strings', label:'Strings',    icon:'🎻' },
+  { id:'brass',   label:'Brass/Wind', icon:'🎷' },
+  { id:'drums',   label:'Drums',      icon:'🥁' },
+  { id:'synth',   label:'Synth',      icon:'🎛️' },
+  { id:'vocals',  label:'Vocals',     icon:'🎤' },
 ]
 const VOICE_TYPES = [
-  { id:'woman',    label:'Woman',    Icon: IconPerson, desc:'Warm soprano / alto' },
-  { id:'man',      label:'Man',      Icon: IconPerson, desc:'Rich tenor / baritone' },
-  { id:'baby',     label:'Baby',     Icon: IconBaby,   desc:'Light, innocent, high' },
-  { id:'angel',    label:'Angel',    Icon: IconAngel,  desc:'Ethereal & celestial' },
-  { id:'choir',    label:'Choir',    Icon: IconGroup,  desc:'Full SATB harmony' },
-  { id:'robot',    label:'Robot',    Icon: IconRobot,  desc:'Vocoder / auto-tune' },
-  { id:'falsetto', label:'Falsetto', Icon: IconMicUp,  desc:'Breathy high register' },
-  { id:'whisper',  label:'Whisper',  Icon: IconMicSoft,desc:'Intimate, spoken feel' },
+  { id:'woman',    label:'Woman',    icon:'👩', desc:'Warm soprano / alto' },
+  { id:'man',      label:'Man',      icon:'👨', desc:'Rich tenor / baritone' },
+  { id:'baby',     label:'Baby',     icon:'👶', desc:'Light, innocent, high' },
+  { id:'angel',    label:'Angel',    icon:'👼', desc:'Ethereal & celestial' },
+  { id:'choir',    label:'Choir',    icon:'🎼', desc:'Full SATB harmony' },
+  { id:'robot',    label:'Robot',    icon:'🤖', desc:'Vocoder / auto-tune' },
+  { id:'falsetto', label:'Falsetto', icon:'🎵', desc:'Breathy high register' },
+  { id:'whisper',  label:'Whisper',  icon:'🤫', desc:'Intimate, spoken feel' },
 ]
+
+/* ── Music theory helpers ────────────────────────────────────── */
+// imported from musicEngine.js
+// imported from musicEngine.js
+// imported from musicEngine.js
+// imported from musicEngine.js
+
+// imported from musicEngine.js
+
+// imported from musicEngine.js
 
 /* ═══════════════════════════════════════════════════════════════
    PROFESSIONAL SHEET MUSIC PDF GENERATOR
+   Renders real musical notation: treble clef, time signature,
+   bar lines, note heads, stems, chord symbols, Roman numerals,
+   scale reference, lyrics placeholder, instrument part labels,
+   and filterable per-instrument sections.
    ═══════════════════════════════════════════════════════════════ */
 
+// Musical note data — chord → MIDI-relative note positions for staff
 const CHORD_NOTES = {
+  // Each chord maps to [root, third, fifth] as semitone offsets above middle C (C4=60)
   'C':  [0,4,7], 'Cm': [0,3,7], 'C#': [1,5,8], 'C#m':[1,4,8],
   'D':  [2,6,9], 'Dm': [2,5,9], 'D#': [3,7,10],'D#m':[3,6,10],
   'E':  [4,8,11],'Em': [4,7,11],'F':  [5,9,12], 'Fm': [5,8,12],
@@ -94,25 +104,29 @@ const CHORD_NOTES = {
   'Gdim':[7,10,13],'Adim':[9,12,15],'Bdim':[11,14,17],
 }
 
+// MIDI semitone → staff line position (lines from middle C, positive = up)
 function midiToStaffPos(semitone) {
   const octave = Math.floor(semitone / 12)
   const note   = semitone % 12
-  const diatonic = [0,0,1,1,2,3,3,4,4,5,5,6]
+  const diatonic = [0,0,1,1,2,3,3,4,4,5,5,6] // C=0,D=1,E=2,F=3,G=4,A=5,B=6
   return octave * 7 + diatonic[note]
 }
 
+// Draw a filled note head as ellipse on the staff
 function drawNoteHead(doc, x, staffY, staffPos, filled=true, stemUp=true) {
-  const SPACE = 2.5
-  const y = staffY - (staffPos - 4) * SPACE
+  const SPACE = 2.5 // mm between staff lines
+  const y = staffY - (staffPos - 4) * SPACE  // pos 4 = first ledger line above (middle C area)
   const rx = 1.3, ry = 1.0
   if (filled) {
     doc.setFillColor(20,20,20); doc.ellipse(x, y, rx, ry, 'F')
   } else {
     doc.setDrawColor(20,20,20); doc.setLineWidth(0.3); doc.ellipse(x, y, rx, ry, 'D')
   }
+  // Stem
   const stemLen = 7
   if (stemUp) { doc.setLineWidth(0.25); doc.setDrawColor(20,20,20); doc.line(x+rx, y, x+rx, y-stemLen) }
   else        { doc.setLineWidth(0.25); doc.setDrawColor(20,20,20); doc.line(x-rx, y, x-rx, y+stemLen) }
+  // Ledger lines if needed
   doc.setLineWidth(0.25); doc.setDrawColor(60,60,60)
   for (let lp = 0; lp <= 2; lp++) {
     if (staffPos <= lp * 2) doc.line(x-2.2, staffY-(lp*2-4)*SPACE, x+2.2, staffY-(lp*2-4)*SPACE)
@@ -123,27 +137,32 @@ function drawNoteHead(doc, x, staffY, staffPos, filled=true, stemUp=true) {
   return y
 }
 
+// Draw a 5-line staff
 function drawStaff(doc, x, y, width) {
   const SPACE = 2.5
   doc.setDrawColor(80,80,80); doc.setLineWidth(0.22)
   for (let i = 0; i < 5; i++) {
     doc.line(x, y + i * SPACE, x + width, y + i * SPACE)
   }
-  return y + 4 * SPACE
+  return y + 4 * SPACE  // bottom line y
 }
 
+// Draw treble clef symbol using bezier approximation
 function drawTrebleClef(doc, x, y) {
   doc.setFont('times','bold'); doc.setFontSize(22); doc.setTextColor(30,30,30)
   doc.text('𝄞', x, y+8, {baseline:'top'})
+  // Fallback: draw a simplified G clef using lines if font doesn't render
   doc.setDrawColor(40,40,40); doc.setLineWidth(0.4)
 }
 
+// Draw time signature 4/4
 function drawTimeSignature(doc, x, y) {
   doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(20,20,20)
   doc.text('4', x, y+1,   {align:'center'})
   doc.text('4', x, y+6.5, {align:'center'})
 }
 
+// Draw a sharp or flat accidental
 function drawAccidental(doc, x, y, type) {
   doc.setFont('times','normal'); doc.setFontSize(8); doc.setTextColor(20,20,20)
   if (type === 'sharp') doc.text('♯', x-2, y)
@@ -160,8 +179,8 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' })
   const W=210, M=14, INNER=W-M*2; let y=0, page=1
 
-  const CORAL  = [56,189,248]
-  const AMBER  = [14,165,233]
+  const CORAL  = [255,107,71]
+  const AMBER  = [255,179,71]
   const DARK   = [18,16,12]
   const GREY   = [90,82,72]
   const LGREY  = [160,155,148]
@@ -169,6 +188,7 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
 
   const newPage = () => {
     doc.addPage(); page++; y = 18
+    // running header
     doc.setFillColor(...CORAL); doc.rect(0,0,W,3,'F')
     doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(...LGREY)
     doc.text(`KalzTunz · ${params.key} ${params.mode} · ${params.genre} · ${params.bpm} BPM`, M, 8)
@@ -179,9 +199,11 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
 
   const checkPage = (need=30) => { if (y + need > 282) newPage() }
 
+  // ── COVER HEADER ─────────────────────────────────────────────
   doc.setFillColor(...CORAL); doc.rect(0,0,W,8,'F')
   doc.setFillColor(...AMBER);
   doc.triangle(0,8, 45,8, 0,22, 'F')
+  doc.setFillColor(255,107,71,0.4)
 
   y = 24
   doc.setFont('times','bold'); doc.setFontSize(28); doc.setTextColor(...DARK)
@@ -190,6 +212,7 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
   doc.setFont('times','italic'); doc.setFontSize(13); doc.setTextColor(...GREY)
   doc.text(`${params.key} ${params.mode}  ·  ${params.mood} mood`, W/2, y, {align:'center'}); y+=7
 
+  // Metadata row
   doc.setFont('helvetica','normal'); doc.setFontSize(8.5); doc.setTextColor(...GREY)
   const meta = [
     `Tempo: ${params.bpm} BPM`,
@@ -206,10 +229,12 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
     doc.text(`Filtered for: ${filterInstrument.toUpperCase()} PART`, W/2, y, {align:'center'}); y+=5
   }
 
+  // Separator rule
   doc.setDrawColor(...CORAL); doc.setLineWidth(0.8); doc.line(M, y, W-M, y)
   doc.setDrawColor(...AMBER); doc.setLineWidth(0.3); doc.line(M, y+1, W-M, y+1)
   y += 6
 
+  // ── SECTION 1: SCALE REFERENCE TABLE ─────────────────────────
   doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CORAL)
   doc.text('SCALE REFERENCE', M, y); y+=4
 
@@ -218,16 +243,21 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
     scaleRef.forEach((s, i) => {
       const x = M + i * colW
       const isRoot = i === 0
+      // Cell background
       doc.setFillColor(isRoot ? 255 : 248, isRoot ? 248 : 246, isRoot ? 240 : 244)
       doc.setDrawColor(...(isRoot ? CORAL : LLGREY))
       doc.setLineWidth(isRoot ? 0.5 : 0.2)
       doc.roundedRect(x, y, colW-1, 14, 1.5, 1.5, 'FD')
+      // Top accent
       doc.setFillColor(...(isRoot ? CORAL : AMBER))
       doc.rect(x, y, colW-1, 2, 'F')
+      // Roman numeral
       doc.setFont('times','italic'); doc.setFontSize(7); doc.setTextColor(...GREY)
       doc.text(s.roman||'', x+colW/2-0.5, y+5.5, {align:'center'})
+      // Chord name
       doc.setFont('times','bold'); doc.setFontSize(9.5); doc.setTextColor(...DARK)
       doc.text(s.chord||s.note||'', x+colW/2-0.5, y+10.5, {align:'center'})
+      // Quality badge
       if (s.quality) {
         doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(...LGREY)
         doc.text(s.quality==='m'?'min':s.quality==='dim'?'dim':'maj', x+colW/2-0.5, y+13.5, {align:'center'})
@@ -236,12 +266,13 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
     y += 18
   }
 
+  // ── SECTION 2: CHORD PROGRESSIONS WITH REAL NOTATION ─────────
   checkPage(50)
   doc.setDrawColor(...LLGREY); doc.setLineWidth(0.2); doc.line(M,y,W-M,y); y+=5
   doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CORAL)
   doc.text('CHORD PROGRESSIONS', M, y); y+=5
 
-  const ACCENTS = [[56,189,248],[14,165,233],[34,211,238],[74,222,128],[139,92,246],[248,113,113]]
+  const ACCENTS = [[255,107,71],[255,179,71],[0,180,168],[232,84,42],[139,92,246],[52,211,153]]
   const primaryProgs = richProgs && richProgs.length ? richProgs : progs.map(p => ({ display:p, chords:p.split(' — '), timeline:[] }))
 
   primaryProgs.forEach((variation, vi) => {
@@ -250,27 +281,33 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
     const chords = variation.chords || variation.display?.split(' — ') || []
     const romanNums = (variation.timeline || []).slice(0, chords.length).map(t => t.roman || '')
 
+    // Variation label
     doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...ac)
     doc.text(`Variation ${vi+1}${vi===0?' — Primary':''}`, M, y); y+=4
 
-    const staffX = M+12
-    const staffW = INNER-13
-    const SPACE  = 2.6
+    // ── STAFF SYSTEM ────────────────────────────────────────────
+    const staffX = M+12     // left margin after clef
+    const staffW = INNER-13 // staff width
+    const SPACE  = 2.6      // line spacing mm
 
+    // Draw 5-line staff
     doc.setDrawColor(70,70,70); doc.setLineWidth(0.2)
     for (let line=0; line<5; line++) {
       doc.line(staffX, y+line*SPACE, staffX+staffW, y+line*SPACE)
     }
     const staffBottom = y + 4*SPACE
-    const staffMid    = y + 2*SPACE
+    const staffMid    = y + 2*SPACE  // middle of staff (B4 on treble)
 
+    // Treble clef (G clef) — use unicode character
     doc.setFont('times','bold'); doc.setFontSize(18); doc.setTextColor(30,30,30)
     doc.text('𝄞', staffX-9, y+10)
 
+    // Time signature
     doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(30,30,30)
     doc.text('4', staffX+1.5, y+2.5, {align:'center'})
     doc.text('4', staffX+1.5, y+7.5, {align:'center'})
 
+    // Key signature — draw sharps or flats
     const KEY_SHARPS = {'G':1,'D':2,'A':3,'E':4,'B':5,'F#':6,'C#':7}
     const KEY_FLATS  = {'F':1,'Bb':2,'Eb':3,'Ab':4,'Db':5,'Gb':6,'Cb':7}
     const rootNote = params.key.split(' ')[0]
@@ -287,34 +324,46 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
       }
     }
 
+    // Distribute chord boxes along the staff — 4 per measure, 2 measures per line
+    const chordsPerBar = 1  // one chord per measure beat group
     const barCount = chords.length
     const barW = (staffW - 16) / Math.max(barCount, 1)
+    let noteX = staffX + 16 + barW/2
 
     chords.forEach((chordName, ci) => {
       const barX = staffX + 16 + ci * barW
 
+      // Bar line between measures
       if (ci > 0) {
         doc.setDrawColor(60,60,60); doc.setLineWidth(0.35)
         doc.line(barX, y, barX, staffBottom)
       }
 
+      // Chord symbol above staff
       doc.setFont('times','bold'); doc.setFontSize(10); doc.setTextColor(...ac)
+      const hasAccidental = chordName.includes('#') || chordName.includes('b')
       doc.text(chordName, barX+barW/2, y-2, {align:'center'})
 
+      // Roman numeral below chord symbol
       if (romanNums[ci]) {
         doc.setFont('times','italic'); doc.setFontSize(6.5); doc.setTextColor(...GREY)
         doc.text(romanNums[ci], barX+barW/2, y-6, {align:'center'})
       }
 
+      // Note heads on staff — draw chord notes (root, 3rd, 5th)
       const notesForChord = CHORD_NOTES[chordName] || CHORD_NOTES[chordName.replace('m','').replace('dim','')] || [0,4,7]
       const noteXpos = barX + barW*0.45
 
       notesForChord.slice(0,3).forEach((semitone, ni) => {
-        const chromatic   = [0,0,1,1,2,3,3,4,4,5,5,6]
+        // Map semitone to staff position (treble clef: E4=bottom line)
+        // Treble staff lines (bottom to top): E4 F4 G4 A4 B4 C5 D5 E5 F5
+        // position 0=E4(bottom line), 1=F4(space), 2=G4(2nd line), ...
+        const chromatic   = [0,0,1,1,2,3,3,4,4,5,5,6] // C=0,D=1,E=2,F=3,G=4,A=5,B=6
         const diatonic    = chromatic[((semitone % 12) + 12) % 12]
-        const staffPos    = diatonic - 2 + (ni < 2 ? 0 : 1)
+        const staffPos    = diatonic - 2 + (ni < 2 ? 0 : 1) // E4 = chromatic 4 = diatonic 2
         const noteY       = staffBottom - staffPos * SPACE
 
+        // Ledger lines
         if (noteY < y - 0.5) {
           doc.setDrawColor(80,80,80); doc.setLineWidth(0.2)
           for (let ly = y - SPACE; ly >= noteY - 0.5; ly -= SPACE) {
@@ -328,10 +377,13 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
           }
         }
 
+        // Note head
         const isRoot = ni === 0
+        doc.setFillColor(...(isRoot ? DARK : [60,60,60]))
         doc.setFillColor(...(isRoot ? DARK : [60,60,60]))
         doc.ellipse(noteXpos, noteY, 1.4, 1.0, 'F')
 
+        // Stem (up for lower notes, down for higher)
         doc.setDrawColor(...(isRoot ? DARK : [60,60,60])); doc.setLineWidth(0.3)
         if (noteY > staffMid) {
           doc.line(noteXpos+1.4, noteY, noteXpos+1.4, noteY - 7)
@@ -340,12 +392,14 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
         }
       })
 
+      // Beat dots — 4 beats per bar
       for (let b=1; b<=3; b++) {
         doc.setFillColor(...LLGREY)
         doc.circle(barX + barW * b/4, staffBottom + 3.5, 0.4, 'F')
       }
     })
 
+    // Final double bar line
     const finalX = staffX + 16 + barCount * barW
     doc.setDrawColor(40,40,40); doc.setLineWidth(0.35)
     doc.line(finalX, y, finalX, staffBottom)
@@ -354,25 +408,34 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
 
     y = staffBottom + 8
 
+    // ── CHORD BOX ROW ────────────────────────────────────────────
+    // Full detailed chord diagram row below the staff
     const boxW = INNER / Math.max(chords.length, 1)
     chords.forEach((chord, ci) => {
       const x = M + ci * boxW
+      const isRoot = ci === 0
+      // Box
       doc.setFillColor(250,248,244); doc.setDrawColor(...ac)
       doc.setLineWidth(0.35)
       doc.roundedRect(x, y, boxW-1, 18, 2, 2, 'FD')
+      // Top accent bar
       doc.setFillColor(...ac); doc.rect(x, y, boxW-1, 2.5, 'F')
+      // Roman numeral
       if (romanNums[ci]) {
         doc.setFont('times','italic'); doc.setFontSize(6.5); doc.setTextColor(100,90,80)
         doc.text(romanNums[ci], x+boxW/2-0.5, y+6, {align:'center'})
       }
+      // Chord name
       doc.setFont('times','bold')
       doc.setFontSize(chord.length > 3 ? 9 : 12); doc.setTextColor(...DARK)
       doc.text(chord, x+boxW/2-0.5, y+12.5, {align:'center'})
+      // Beat marker
       doc.setFont('helvetica','normal'); doc.setFontSize(5); doc.setTextColor(...LGREY)
       doc.text(`${ci*4+1}`, x+2, y+17)
     })
     y += 22
 
+    // ── LYRICS LINE (placeholder if vocals) ─────────────────────
     if (params.hasVocals || params.instruments?.includes('vocals')) {
       checkPage(14)
       doc.setFont('helvetica','italic'); doc.setFontSize(7); doc.setTextColor(...LGREY)
@@ -388,16 +451,17 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
     }
   })
 
+  // ── SECTION 3: INSTRUMENT PARTS (filterable) ──────────────────
   const instrList = Object.keys(instrNotes || {})
     .filter(k => filterInstrument === 'all' || !filterInstrument || k === filterInstrument)
-
+  
   if (instrList.length) {
     checkPage(20)
     doc.setDrawColor(...LLGREY); doc.setLineWidth(0.2); doc.line(M,y,W-M,y); y+=5
     doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CORAL)
     doc.text('INSTRUMENT PERFORMANCE NOTES', M, y); y+=4
 
-    const INSTR_ICONS = { piano:'Piano', guitar:'Guitar', bass:'Bass', drums:'Drums', strings:'Strings', vocals:'Vocals', synth:'Synth', brass:'Brass/Wind' }
+    const INSTR_ICONS = { piano:'♪ Piano', guitar:'♬ Guitar', bass:'♩ Bass', drums:'♫ Drums', strings:'♩ Strings', vocals:'♬ Vocals', synth:'♩ Synth', brass:'♪ Brass/Wind' }
 
     instrList.forEach(instr => {
       checkPage(22)
@@ -405,6 +469,7 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
       const label = INSTR_ICONS[instr] || instr
       const isFiltered = filterInstrument === instr
 
+      // Header row
       doc.setFillColor(...(isFiltered ? CORAL : [245,242,238]))
       doc.roundedRect(M, y, INNER, 7, 1.5, 1.5, 'F')
       doc.setFont('helvetica','bold'); doc.setFontSize(8)
@@ -412,10 +477,11 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
       doc.text(label.toUpperCase(), M+3, y+4.5)
       if (isFiltered) {
         doc.setFont('helvetica','normal'); doc.setFontSize(6.5)
-        doc.text('FEATURED PART', W-M-2, y+4.5, {align:'right'})
+        doc.text('★ FEATURED PART', W-M-2, y+4.5, {align:'right'})
       }
       y += 8
 
+      // Note text — wrapped
       doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(...GREY)
       const lines = doc.splitTextToSize(note, INNER-4)
       lines.forEach(line => {
@@ -423,10 +489,12 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
         doc.text(line, M+2, y); y += 4.5
       })
 
+      // Pattern diagram for certain instruments
       if (instr === 'guitar' || instr === 'piano') {
         checkPage(10)
         y += 1
         doc.setFont('courier','normal'); doc.setFontSize(7); doc.setTextColor(100,95,88)
+        const bpm = params.bpm
         if (instr === 'guitar') {
           doc.text('Pattern:  1  +  2  +  3  +  4  +', M+2, y); y+=4
           doc.text('          D     D  U     U  D  U ', M+2, y); y+=5
@@ -448,20 +516,24 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
     })
   }
 
+  // ── SECTION 4: SCALE FINGERING REFERENCE ──────────────────────
   if (scaleRef && scaleRef.length) {
     checkPage(40)
     doc.setDrawColor(...LLGREY); doc.setLineWidth(0.2); doc.line(M,y,W-M,y); y+=5
     doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...CORAL)
     doc.text('SCALE FINGERING REFERENCE', M, y); y+=4
 
+    // Mini staff for scale
     const scW = INNER-5
     doc.setDrawColor(80,80,80); doc.setLineWidth(0.18)
     const SSPACE = 2.2
     for (let l=0; l<5; l++) doc.line(M, y+l*SSPACE, M+scW, y+l*SSPACE)
 
+    // Treble clef
     doc.setFont('times','bold'); doc.setFontSize(14); doc.setTextColor(40,40,40)
     doc.text('𝄞', M, y+6)
 
+    // Draw scale notes ascending
     const scaleNoteNames = scaleRef.map(s => s.note)
     const scaleStepX = (scW-15) / Math.max(scaleNoteNames.length, 1)
     scaleNoteNames.forEach((note, ni) => {
@@ -470,18 +542,24 @@ async function exportPDF(params, progs, richProgs, scaleRef, instrNotes, filterI
       const diat = [0,0,1,1,2,3,3,4,4,5,5,6]
       const idx = chromatic.indexOf(note)
       const dp  = idx >= 0 ? diat[idx] : 0
+      // Staff position: E4=0(bottom line), each step = 1.1mm up
       const noteY = y + 4*SSPACE - (dp - 2)*SSPACE
       doc.setFillColor(...DARK); doc.ellipse(nx, noteY, 1.1, 0.85, 'F')
+      // Stem
       doc.setDrawColor(...DARK); doc.setLineWidth(0.25)
       doc.line(nx+1.1, noteY, nx+1.1, noteY-5.5)
+      // Note name below
       doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(...CORAL)
       doc.text(note, nx, y+4*SSPACE+5, {align:'center'})
+      // Degree number
       doc.setFont('helvetica','normal'); doc.setFontSize(5.5); doc.setTextColor(...GREY)
       doc.text(String(ni+1), nx, y+4*SSPACE+8.5, {align:'center'})
     })
     y += 4*SSPACE + 14
   }
 
+  // ── FOOTER ────────────────────────────────────────────────────
+  // Add footer to every page
   const totalPages = page
   for (let p=1; p<=totalPages; p++) {
     doc.setPage(p)
@@ -547,7 +625,7 @@ function PlayerBar({player,chords,title}) {
   return (
     <div style={{background:'linear-gradient(135deg,var(--bg-3),var(--bg-2))',border:'1px solid var(--border-hi)',borderRadius:13,padding:'.68rem .95rem',marginBottom:'.85rem'}}>
       <div style={{display:'flex',alignItems:'center',gap:'.55rem',marginBottom:'.38rem'}}>
-        <button onClick={toggle} style={{width:33,height:33,borderRadius:'50%',background:'linear-gradient(135deg,var(--accent),var(--accent-2))',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0,boxShadow:'0 3px 10px rgba(56,189,248,.28)',transition:'transform .15s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'} onMouseLeave={e=>e.currentTarget.style.transform=''}>
+        <button onClick={toggle} style={{width:33,height:33,borderRadius:'50%',background:'linear-gradient(135deg,var(--accent),var(--accent-2))',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',flexShrink:0,boxShadow:'0 3px 10px rgba(255,107,71,.28)',transition:'transform .15s'}} onMouseEnter={e=>e.currentTarget.style.transform='scale(1.08)'} onMouseLeave={e=>e.currentTarget.style.transform=''}>
           {playing&&!paused?<svg width={12} height={12} viewBox="0 0 24 24" fill="white"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>:<svg width={12} height={12} viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>}
         </button>
         {(playing||paused)&&<button onClick={stop} style={{width:24,height:24,borderRadius:'50%',border:'1px solid var(--border)',background:'var(--bg-4)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--text-3)',flexShrink:0}}><svg width={8} height={8} viewBox="0 0 24 24" fill="currentColor"><rect x={4} y={4} width={16} height={16}/></svg></button>}
@@ -568,16 +646,19 @@ function SheetMusicView({result,player}) {
   if(!result?.progressions?.length)return null
   const progs  = result.progressions
   const scale  = result.scaleRef||buildScaleRef(result.key||'C',result.mode||'major')
-  const COLORS = ['#38BDF8','#0EA5E9','#22D3EE','#4ADE80','#8b5cf6','#EF4444','#06b6d4']
-  const SP = 11
-  const STAFF_TOP = 32
-  const STAFF_H   = 4*SP
-  const BOX_H     = 26
-  const SVG_H     = STAFF_TOP + STAFF_H + BOX_H + 24
-  const NOTE_POS  = {C:5,D:6,E:0,F:1,G:2,A:3,B:4}
+  const COLORS = ['#f97316','#3b82f6','#10b981','#8b5cf6','#f59e0b','#ef4444','#06b6d4']
+  // Staff geometry
+  const SP = 11            // px between lines (bigger = more readable)
+  const STAFF_TOP = 32     // px from svg top
+  const STAFF_H   = 4*SP   // full staff height
+  const BOX_H     = 26     // chord label box height below staff
+  const SVG_H     = STAFF_TOP + STAFF_H + BOX_H + 24  // total height
+  const NOTE_POS  = {C:5,D:6,E:0,F:1,G:2,A:3,B:4}   // semitone→staff-step
+  const QUALITY   = { '':'maj', 'm':'min', 'dim':'dim', 'aug':'aug', '7':'dom7', 'm7':'min7', 'maj7':'maj7' }
 
   return (
     <div>
+      {/* Legend row */}
       <div style={{display:'flex',alignItems:'center',gap:'1rem',marginBottom:'1rem',flexWrap:'wrap'}}>
         {[{label:'Root note',shape:'ellipse'},{label:'3rd',shape:'circle'},{label:'5th',shape:'dot'}].map(({label,shape})=>(
           <div key={label} style={{display:'flex',alignItems:'center',gap:'.32rem'}}>
@@ -617,16 +698,20 @@ function SheetMusicView({result,player}) {
             </div>
             <div style={{background:'var(--bg-1)',borderRadius:12,border:'1px solid var(--border)',padding:'.6rem .5rem .5rem',overflowX:'auto'}}>
             <svg width="100%" viewBox={`0 0 ${SVG_W} ${SVG_H}`} style={{display:'block',overflow:'visible',minWidth:Math.max(320,SVG_W)}}>
+              {/* Shaded beat groups */}
               {chords.map((_,ci)=>ci%8<4&&<rect key={ci} x={48+ci*BAR_W} y={STAFF_TOP-4} width={BAR_W} height={STAFF_H+8} fill="rgba(255,255,255,.022)" rx={2}/>)}
 
+              {/* Staff lines — bolder outer, lighter inner */}
               {[0,1,2,3,4].map(l=>(
                 <line key={l} x1={0} y1={STAFF_TOP+l*SP} x2={SVG_W} y2={STAFF_TOP+l*SP}
                   stroke="var(--border-hi)" strokeWidth={l===0||l===4?1.2:0.7} opacity={l===0||l===4?.85:.65}/>
               ))}
 
+              {/* Treble clef */}
               <text x={6} y={STAFF_TOP+3.8*SP} fontSize={STAFF_H+8} fontFamily="serif"
                 fill="var(--text-2)" opacity={0.78}>𝄞</text>
 
+              {/* Time signature */}
               <text x={42} y={STAFF_TOP+1.5*SP} fontSize={SP*1.35} fontFamily="sans-serif"
                 fontWeight="900" fill="var(--text-2)" textAnchor="middle">4</text>
               <text x={42} y={STAFF_TOP+3.5*SP} fontSize={SP*1.35} fontFamily="sans-serif"
@@ -642,21 +727,27 @@ function SheetMusicView({result,player}) {
                 const stemUp= nPos < 4
                 const isMin = chord.endsWith('m')&&!chord.endsWith('dim')&&!chord.endsWith('maj7')
                 const isDim = chord.endsWith('dim')
+                const thiCol= isAct ? col : col
                 const textY = STAFF_TOP + STAFF_H + BOX_H + 2
 
+                // Ledger lines above/below staff
                 const ledgerAbove = noteY < STAFF_TOP - 1
                 const ledgerBelow = noteY > STAFF_TOP + STAFF_H + 1
 
                 return (
                   <g key={ci}>
+                    {/* Active highlight */}
                     {isAct&&<rect x={barX} y={STAFF_TOP-8} width={BAR_W} height={STAFF_H+BOX_H+16} fill={`${col}18`} rx={5}/>}
 
+                    {/* Bar line */}
                     {ci>0&&<line x1={barX} y1={STAFF_TOP} x2={barX} y2={STAFF_TOP+STAFF_H}
                       stroke="var(--border)" strokeWidth={ci%4===0?1.5:0.6} opacity={ci%4===0?.9:.5}/>}
 
+                    {/* Double bar at every 4 */}
                     {ci%4===0&&ci>0&&<line x1={barX+2.5} y1={STAFF_TOP} x2={barX+2.5} y2={STAFF_TOP+STAFF_H}
                       stroke="var(--border)" strokeWidth={0.5} opacity={0.4}/>}
 
+                    {/* Roman numeral */}
                     {scale[ci]&&(
                       <text x={beatX} y={STAFF_TOP-11} fontSize={8} fontFamily="serif" fontStyle="italic"
                         fill={isAct?col:"var(--text-3)"} textAnchor="middle" opacity={isAct?1:.8}>
@@ -664,12 +755,14 @@ function SheetMusicView({result,player}) {
                       </text>
                     )}
 
+                    {/* Chord name above roman numeral */}
                     <text x={beatX} y={STAFF_TOP-21} fontSize={chord.length>4?9.5:11.5}
                       fontFamily="'Georgia',serif" fontWeight="bold"
                       fill={isAct?col:col} textAnchor="middle" opacity={isAct?1:.75}>
                       {chord}
                     </text>
 
+                    {/* Ledger lines */}
                     {ledgerAbove&&Array.from({length:Math.ceil((STAFF_TOP-noteY)/SP)},(_,i)=>(
                       <line key={i} x1={beatX-8} y1={STAFF_TOP-(i+1)*SP} x2={beatX+8} y2={STAFF_TOP-(i+1)*SP}
                         stroke="var(--text-2)" strokeWidth={0.8}/>
@@ -679,32 +772,39 @@ function SheetMusicView({result,player}) {
                         stroke="var(--text-2)" strokeWidth={0.8}/>
                     ))}
 
+                    {/* Accidental dot for sharp chords */}
                     {rn!==chord.replace(/[^A-G#]/g,'').slice(0,2)&&rn.includes('#')&&(
                       <text x={beatX-7} y={noteY+3} fontSize={9} fill="var(--text)" opacity={.8}>#</text>
                     )}
 
+                    {/* Note head (root) — filled oval */}
                     <ellipse cx={beatX} cy={noteY} rx={5.5} ry={4.2}
                       fill={isAct?col:"var(--text)"} opacity={isAct?.95:.88}
                       transform={`rotate(-12,${beatX},${noteY})`}/>
 
+                    {/* 3rd interval dot */}
                     <circle cx={beatX+1.5} cy={noteY-(isMin?3:4)*(SP/2)} r={3.8}
                       fill={col} opacity={isAct?.7:.45}/>
 
+                    {/* 5th interval dot */}
                     <circle cx={beatX-1} cy={noteY-(isDim?4.5:3.5)*(SP/2)} r={2.8}
                       fill={col} opacity={isAct?.5:.28}/>
 
+                    {/* Stem */}
                     {stemUp
                       ?<line x1={beatX+5.5} y1={noteY-1} x2={beatX+5.5} y2={noteY-SP*3}
                           stroke={isAct?col:"var(--text)"} strokeWidth={1.5} opacity={isAct?.9:.75}/>
                       :<line x1={beatX-5.5} y1={noteY+1} x2={beatX-5.5} y2={noteY+SP*3}
                           stroke={isAct?col:"var(--text)"} strokeWidth={1.5} opacity={isAct?.9:.75}/>}
 
+                    {/* Beat tick marks */}
                     {[1,2,3].map(b=>(
                       <line key={b} x1={barX+b*BAR_W/4} y1={STAFF_TOP+STAFF_H+4}
                         x2={barX+b*BAR_W/4} y2={STAFF_TOP+STAFF_H+8}
                         stroke="var(--border-hi)" strokeWidth={b===2?1.2:0.7}/>
                     ))}
 
+                    {/* Chord label box */}
                     <rect x={barX+2} y={STAFF_TOP+STAFF_H+10} width={BAR_W-4} height={BOX_H-2}
                       rx={5} fill={isAct?`${col}22`:`${col}0e`}
                       stroke={isAct?col:"var(--border)"} strokeWidth={isAct?1.4:.7}/>
@@ -719,6 +819,7 @@ function SheetMusicView({result,player}) {
                 )
               })}
 
+              {/* Final double bar */}
               <line x1={48+chords.length*BAR_W}   y1={STAFF_TOP} x2={48+chords.length*BAR_W}   y2={STAFF_TOP+STAFF_H} stroke="var(--text)" strokeWidth={1} opacity={.75}/>
               <line x1={48+chords.length*BAR_W+3} y1={STAFF_TOP} x2={48+chords.length*BAR_W+3} y2={STAFF_TOP+STAFF_H} stroke="var(--text)" strokeWidth={3} opacity={.75}/>
             </svg>
@@ -726,12 +827,12 @@ function SheetMusicView({result,player}) {
           </div>
         )
       })}
-      </div>
+      </div>  {/* close overflowX:auto scroll container */}
       {scale.length>0&&(
         <div style={{marginTop:'.75rem',borderTop:'1px solid var(--border)',paddingTop:'.75rem'}}>
           <div style={{fontSize:'.68rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.5rem'}}>Scale: {result.key} {result.mode}</div>
           <div style={{display:'flex',gap:'.25rem',flexWrap:'wrap'}}>
-            {scale.map((s,i)=><div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'.32rem .5rem',borderRadius:8,background:i===0?'rgba(56,189,248,.12)':'var(--bg-3)',border:`1px solid ${i===0?'var(--accent)':'var(--border)'}`,minWidth:38}}><span style={{fontSize:'.78rem',fontWeight:800,color:i===0?'var(--accent)':'var(--text)'}}>{s.chord}</span><span style={{fontSize:'.58rem',color:'var(--text-3)',fontStyle:'italic'}}>{s.roman}</span></div>)}
+            {scale.map((s,i)=><div key={i} style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'.32rem .5rem',borderRadius:8,background:i===0?'rgba(255,107,71,.12)':'var(--bg-3)',border:`1px solid ${i===0?'var(--accent)':'var(--border)'}`,minWidth:38}}><span style={{fontSize:'.78rem',fontWeight:800,color:i===0?'var(--accent)':'var(--text)'}}>{s.chord}</span><span style={{fontSize:'.58rem',color:'var(--text-3)',fontStyle:'italic'}}>{s.roman}</span></div>)}
           </div>
         </div>
       )}
@@ -743,7 +844,7 @@ function SheetMusicView({result,player}) {
 function ShareModal({result,onClose}) {
   const [copied,setCopied]=useState(false)
   if(!result)return null
-  const text=`KalzTunz — ${result.genre||'Chord'} Sheet
+  const text=`🎵 KalzTunz — ${result.genre||'Chord'} Sheet
 Key: ${result.key} ${result.mode} · Mood: ${result.mood} · BPM: ${result.bpm}
 
 ${result.progressions.slice(0,3).map((p,i)=>`${i+1}. ${p}`).join('\n')}
@@ -757,7 +858,7 @@ Generate free at kalztunz.com`
       <div style={{width:'100%',maxWidth:400,background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:22,padding:'1.75rem',boxShadow:'0 24px 80px rgba(0,0,0,.55)'}} onClick={e=>e.stopPropagation()}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1rem'}}>
           <h2 style={{fontFamily:"'Playfair Display',serif",fontSize:'1rem',fontWeight:800}}>Share Chord Sheet</h2>
-          <button onClick={onClose} style={{background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.3rem',cursor:'pointer',color:'var(--text-3)',display:'flex'}}><IconClose size={14}/></button>
+          <button onClick={onClose} style={{background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.18rem .55rem',cursor:'pointer',fontSize:'.72rem',color:'var(--text-3)',fontFamily:'inherit'}}>✕</button>
         </div>
         <div style={{background:'var(--bg-3)',borderRadius:10,padding:'.65rem',fontSize:'.72rem',fontFamily:"'Space Mono',monospace",lineHeight:1.65,color:'var(--text-2)',marginBottom:'1rem',maxHeight:100,overflowY:'auto',border:'1px solid var(--border)',whiteSpace:'pre-wrap'}}>{text}</div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.45rem',marginBottom:'.6rem'}}>
@@ -765,7 +866,7 @@ Generate free at kalztunz.com`
             <button key={p} onClick={()=>p==='native'?nat():share(p)} style={{display:'flex',alignItems:'center',gap:'.45rem',padding:'.48rem .65rem',borderRadius:10,border:`1.5px solid ${c}33`,background:`${c}0e`,cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.78rem',color:c,transition:'all .18s'}} onMouseEnter={e=>{e.currentTarget.style.background=`${c}20`}} onMouseLeave={e=>{e.currentTarget.style.background=`${c}0e`}}>{i} {l}</button>
           ))}
         </div>
-        <button onClick={copy} className="btn btn--secondary" style={{width:'100%',justifyContent:'center',gap:'.4rem',background:copied?'rgba(74,222,128,.1)':'',borderColor:copied?'var(--accent-suc)':'',color:copied?'var(--accent-suc)':''}}>{copied?<><IconCheck size={14}/> Copied!</>:<><IconCopy size={14}/> Copy text</>}</button>
+        <button onClick={copy} className="btn btn--secondary" style={{width:'100%',justifyContent:'center',background:copied?'rgba(52,211,153,.1)':'',borderColor:copied?'var(--green)':'',color:copied?'var(--green)':''}}>{copied?'✓ Copied!':'📋 Copy text'}</button>
       </div>
     </div>
   )
@@ -773,12 +874,12 @@ Generate free at kalztunz.com`
 
 /* ── Walkthrough popup ───────────────────────────────────────── */
 const WT = [
-  { Icon: IconGuitar,  title:'Start with Genre', desc:'Pick your musical style first. Genre shapes which moods, scales and instruments make harmonic sense together.' },
-  { Icon: IconSmile,   title:'Choose a Mood',    desc:'Mood sets the emotional tone. Available moods are curated for your genre — no mismatches.' },
-  { Icon: IconKey,     title:'Key & Scale',      desc:'Pick the root note and scale mode. Major = bright; minor = deep; dorian/mixolydian add colour; pentatonic is foolproof.' },
-  { Icon: IconSliders, title:'Instruments',      desc:'Select instruments for the progression. Choosing Vocals reveals a Voice Type panel — pick your singer character.' },
-  { Icon: IconMic,     title:'Voice Type',       desc:'Woman, Man, Angel, Choir, Robot and more. Each hints at melodic register and style, shown in the PDF performance notes.' },
-  { Icon: IconBolt,    title:'Generate!',         desc:'Hit Generate. A local preview appears instantly. The backend then delivers the full theory result. Export PDF when ready.' },
+  { icon:'🎸', title:'Start with Genre', desc:'Pick your musical style first. Genre shapes which moods, scales and instruments make harmonic sense together.' },
+  { icon:'🎭', title:'Choose a Mood',    desc:'Mood sets the emotional tone. Available moods are curated for your genre — no mismatches.' },
+  { icon:'🔑', title:'Key & Scale',      desc:'Pick the root note and scale mode. Major = bright; minor = deep; dorian/mixolydian add colour; pentatonic is foolproof.' },
+  { icon:'🎛️', title:'Instruments',      desc:'Select instruments for the progression. Choosing Vocals reveals a Voice Type panel — pick your singer character.' },
+  { icon:'🎤', title:'Voice Type',       desc:'Woman, Man, Angel, Choir, Robot and more. Each hints at melodic register and style, shown in the PDF performance notes.' },
+  { icon:'⚡', title:'Generate!',         desc:'Hit Generate. A local preview appears instantly. The backend then delivers the full theory result. Export PDF when ready.' },
 ]
 function Walkthrough({ onClose }) {
   const [step, setStep] = useState(0)
@@ -786,9 +887,11 @@ function Walkthrough({ onClose }) {
   return (
     <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.72)',zIndex:900,display:'flex',alignItems:'center',justifyContent:'center',padding:'1rem',animation:'fadeIn .18s ease' }} onClick={onClose}>
       <div style={{ width:'100%',maxWidth:460,background:'var(--bg-1)',border:'1px solid var(--border-hi)',borderRadius:24,overflow:'hidden',boxShadow:'0 24px 80px rgba(0,0,0,.6)',animation:'dropIn .28s cubic-bezier(.34,1.2,.64,1)' }} onClick={e=>e.stopPropagation()}>
+        {/* progress bar */}
         <div style={{ height:3,background:'var(--bg-3)' }}>
           <div style={{ height:'100%',background:'linear-gradient(90deg,var(--accent),var(--accent-2))',width:`${((step+1)/WT.length)*100}%`,transition:'width .35s ease' }}/>
         </div>
+        {/* dots + skip */}
         <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'1rem 1.5rem .4rem' }}>
           <div style={{ display:'flex',gap:'.35rem' }}>
             {WT.map((_,i) => (
@@ -797,17 +900,19 @@ function Walkthrough({ onClose }) {
           </div>
           <button onClick={onClose} style={{ background:'none',border:'1px solid var(--border)',borderRadius:999,padding:'.18rem .6rem',cursor:'pointer',fontSize:'.72rem',color:'var(--text-3)',fontFamily:'inherit' }}>Skip tour</button>
         </div>
+        {/* content */}
         <div style={{ padding:'1.25rem 2rem 1.75rem',textAlign:'center' }}>
-          <div key={step} style={{ display:'flex',justifyContent:'center',marginBottom:'.9rem',color:'var(--accent)',animation:'bounceIn .35s cubic-bezier(.34,1.4,.64,1)' }}><s.Icon size={40}/></div>
+          <div key={step} style={{ fontSize:'2.75rem',marginBottom:'.7rem',animation:'bounceIn .35s cubic-bezier(.34,1.4,.64,1)' }}>{s.icon}</div>
           <div style={{ fontSize:'.68rem',fontWeight:700,color:'var(--accent)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:'.3rem' }}>{step+1} / {WT.length}</div>
           <h3 style={{ fontFamily:"'Playfair Display',serif",fontSize:'1.25rem',fontWeight:800,marginBottom:'.6rem' }}>{s.title}</h3>
           <p style={{ color:'var(--text-2)',fontSize:'.875rem',lineHeight:1.7 }}>{s.desc}</p>
         </div>
+        {/* nav */}
         <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.85rem 1.5rem 1.4rem',borderTop:'1px solid var(--border)' }}>
           <button disabled={step===0} onClick={()=>setStep(s=>s-1)} style={{ background:'none',border:'1px solid var(--border)',borderRadius:10,padding:'.4rem .85rem',cursor:step===0?'default':'pointer',opacity:step===0?.35:1,fontFamily:'inherit',fontSize:'.8rem',color:'var(--text-2)' }}>← Back</button>
           <span style={{ fontSize:'.72rem',color:'var(--text-3)' }}>{step+1} of {WT.length}</span>
           {last
-            ? <button onClick={onClose} style={{ background:'linear-gradient(135deg,var(--accent),var(--accent-2))',border:'none',borderRadius:10,padding:'.45rem 1.25rem',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.85rem',color:'#fff' }}>Let's create!</button>
+            ? <button onClick={onClose} style={{ background:'linear-gradient(135deg,var(--accent),var(--accent-2))',border:'none',borderRadius:10,padding:'.45rem 1.25rem',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.85rem',color:'#fff' }}>Let's create! 🎵</button>
             : <button onClick={()=>setStep(s=>s+1)} style={{ background:'linear-gradient(135deg,var(--accent),var(--accent-2))',border:'none',borderRadius:10,padding:'.45rem 1.25rem',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.85rem',color:'#fff' }}>Next →</button>
           }
         </div>
@@ -819,11 +924,11 @@ function Walkthrough({ onClose }) {
 /* ── Step pill ───────────────────────────────────────────────── */
 function Step({ n, label, active, done, color, onClick }) {
   return (
-    <button onClick={onClick} style={{ display:'flex',alignItems:'center',gap:'.42rem',padding:'.32rem .72rem',borderRadius:999,background:active?`${color}14`:done?'rgba(74,222,128,.08)':'var(--bg-3)',border:`1.5px solid ${active?color:done?'var(--accent-suc)':'var(--border)'}`,transition:'all .2s',cursor:'pointer',fontFamily:'inherit' }}>
-      <div style={{ width:19,height:19,borderRadius:'50%',background:active?color:done?'var(--accent-suc)':'var(--bg-4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.66rem',fontWeight:800,color:active||done?'#fff':'var(--text-3)',flexShrink:0 }}>
+    <button onClick={onClick} style={{ display:'flex',alignItems:'center',gap:'.42rem',padding:'.32rem .72rem',borderRadius:999,background:active?`${color}14`:done?'rgba(52,211,153,.08)':'var(--bg-3)',border:`1.5px solid ${active?color:done?'var(--green)':'var(--border)'}`,transition:'all .2s',cursor:'pointer',fontFamily:'inherit' }}>
+      <div style={{ width:19,height:19,borderRadius:'50%',background:active?color:done?'var(--green)':'var(--bg-4)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'.66rem',fontWeight:800,color:active||done?'#fff':'var(--text-3)',flexShrink:0 }}>
         {done ? '✓' : n}
       </div>
-      <span style={{ fontSize:'.73rem',fontWeight:700,color:active?color:done?'var(--accent-suc)':'var(--text-3)',whiteSpace:'nowrap' }}>{label}</span>
+      <span style={{ fontSize:'.73rem',fontWeight:700,color:active?color:done?'var(--green)':'var(--text-3)',whiteSpace:'nowrap' }}>{label}</span>
     </button>
   )
 }
@@ -834,6 +939,7 @@ function Step({ n, label, active, done, color, onClick }) {
 export default function Generate() {
   const { user } = useAuth()
 
+  // Selections
   const [genre,         setGenre]         = useState(null)
   const [mood,          setMood]          = useState(null)
   const [key,           setKey]           = useState('C')
@@ -844,6 +950,7 @@ export default function Generate() {
   const [duration,      setDuration]      = useState(120)
   const [numVariations, setNumVariations] = useState(3)
 
+  // UI
   const [wiz,        setWiz]      = useState(1)
   const [showWalk,   setShowWalk] = useState(false)
   const [loading,    setLoading]  = useState(false)
@@ -902,6 +1009,7 @@ export default function Generate() {
   const handleGenerate = async () => {
     if (!canGen) return
     setLoading(true); setError(null); setJobStatus(null)
+    // Instant local preview
     const localProgs = buildLocal(key, scaleMode, mood, numVariations)
     const ri = CHROMATIC.indexOf(key)
     const sn = (SCALE_INT[scaleMode]||SCALE_INT.major).map(i=>CHROMATIC[(ri+i)%12])
@@ -959,14 +1067,14 @@ export default function Generate() {
       {/* ── Header ── */}
       <div style={{ display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:'1rem',marginBottom:'1.5rem',flexWrap:'wrap' }}>
         <div>
-          <div className="page-header__badge" style={{ marginBottom:'.45rem' }}>AI Generation</div>
+          <div className="page-header__badge" style={{ marginBottom:'.45rem' }}>🤖 AI Generation</div>
           <h1 style={{ fontFamily:"'Playfair Display',serif",fontSize:'clamp(1.5rem,3vw,2rem)',fontWeight:800,marginBottom:'.3rem' }}>Generate Chord Progressions</h1>
           <p style={{ color:'var(--text-2)',fontSize:'.875rem' }}>Pick your genre first — settings adapt to your choice. Follow the steps below.</p>
         </div>
         <button onClick={()=>setShowWalk(true)} style={{ display:'flex',alignItems:'center',gap:'.4rem',padding:'.4rem .9rem',borderRadius:11,border:'1.5px solid var(--border-hi)',background:'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.8rem',color:'var(--text-2)',transition:'all .2s',flexShrink:0 }}
           onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--accent)';e.currentTarget.style.color='var(--accent)'}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border-hi)';e.currentTarget.style.color='var(--text-2)'}}>
-          How to use
+          ❓ How to use
         </button>
       </div>
 
@@ -980,13 +1088,8 @@ export default function Generate() {
         ))}
       </div>
 
-      {/* ── Two-column layout — FIXED: was a raw inline gridTemplateColumns
-           ("1fr 380px") matched by a brittle CSS `[style*=…]` selector that
-           only recognised "1fr 400px", so this page never collapsed to a
-           single column on mobile. Now uses the shared .split-layout class
-           with the width passed as a CSS custom property, so it always
-           collapses correctly regardless of the exact px value. ── */}
-      <div className="split-layout" style={{ '--split-w':'380px' }}>
+      {/* ── Two-column layout ── */}
+      <div style={{ display:'grid',gridTemplateColumns:'1fr 380px',gap:'1.4rem',alignItems:'start' }}>
 
         {/* LEFT: Steps */}
         <div style={{ display:'flex',flexDirection:'column',gap:'1.1rem' }}>
@@ -996,11 +1099,11 @@ export default function Generate() {
             <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.1rem',flexWrap:'wrap',gap:'.5rem' }}>
               <div>
                 <div style={{ fontWeight:800,fontSize:'1rem',fontFamily:"'Playfair Display',serif" }}>
-                  <span style={{ color:'var(--accent)',marginRight:'.35rem' }}>1</span>Genre
+                  <span style={{ color:'var(--accent)',marginRight:'.35rem' }}>①</span>Genre
                 </div>
                 <div style={{ fontSize:'.76rem',color:'var(--text-3)',marginTop:'.08rem' }}>What musical world are you creating in?</div>
               </div>
-              {gObj && <span className="badge badge--coral" style={{gap:'.3rem'}}><gObj.Icon size={12}/> {gObj.label}</span>}
+              {gObj && <span className="badge badge--coral">{gObj.icon} {gObj.label}</span>}
             </div>
             <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'.5rem' }}>
               {GENRES.map(g => (
@@ -1008,7 +1111,7 @@ export default function Generate() {
                   style={{ display:'flex',flexDirection:'column',alignItems:'flex-start',padding:'.75rem .85rem',borderRadius:12,border:`2px solid ${genre===g.id?g.color:'var(--border)'}`,background:genre===g.id?`${g.color}12`:'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',transition:'all .2s',textAlign:'left' }}
                   onMouseEnter={e=>{if(genre!==g.id){e.currentTarget.style.borderColor=g.color+'66';e.currentTarget.style.background=`${g.color}07`}}}
                   onMouseLeave={e=>{if(genre!==g.id){e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.background='var(--bg-2)'}}}>
-                  <span style={{ display:'flex',marginBottom:'.3rem',color:genre===g.id?g.color:'var(--text-2)' }}><g.Icon size={22}/></span>
+                  <span style={{ fontSize:'1.35rem',marginBottom:'.3rem' }}>{g.icon}</span>
                   <span style={{ fontWeight:700,fontSize:'.83rem',color:genre===g.id?g.color:'var(--text)' }}>{g.label}</span>
                   <span style={{ fontSize:'.67rem',color:'var(--text-3)',marginTop:'.06rem',lineHeight:1.35 }}>{g.desc}</span>
                 </button>
@@ -1022,12 +1125,12 @@ export default function Generate() {
               <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'1.1rem',flexWrap:'wrap',gap:'.5rem' }}>
                 <div>
                   <div style={{ fontWeight:800,fontSize:'1rem',fontFamily:"'Playfair Display',serif" }}>
-                    <span style={{ color:'var(--accent-2)',marginRight:'.35rem' }}>2</span>Mood
+                    <span style={{ color:'var(--accent-2)',marginRight:'.35rem' }}>②</span>Mood
                     <span style={{ fontWeight:400,fontSize:'.74rem',color:'var(--text-3)',marginLeft:'.5rem' }}>for {gObj?.label}</span>
                   </div>
                   <div style={{ fontSize:'.76rem',color:'var(--text-3)',marginTop:'.08rem' }}>Sets the emotional tone and progression pattern</div>
                 </div>
-                {mObj && <span style={{ fontSize:'.82rem',fontWeight:700,color:mObj.color,display:'flex',alignItems:'center',gap:'.3rem' }}><mObj.Icon size={14}/> {mood}</span>}
+                {mObj && <span style={{ fontSize:'.82rem',fontWeight:700,color:mObj.color }}>{mObj.icon} {mood}</span>}
               </div>
               <div style={{ display:'flex',flexWrap:'wrap',gap:'.5rem' }}>
                 {avMoods.map(m => {
@@ -1037,7 +1140,7 @@ export default function Generate() {
                       style={{ display:'flex',alignItems:'center',gap:'.45rem',padding:'.55rem .9rem',borderRadius:12,border:`2px solid ${mood===m?mt.color:'var(--border)'}`,background:mood===m?`${mt.color}14`:`${mt.color}08`,cursor:'pointer',fontFamily:'inherit',transition:'all .2s' }}
                       onMouseEnter={e=>{if(mood!==m){e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.borderColor=mt.color+'55'}}}
                       onMouseLeave={e=>{if(mood!==m){e.currentTarget.style.transform='';e.currentTarget.style.borderColor='var(--border)'}}}>
-                      <span style={{ display:'flex',color:mood===m?mt.color:'var(--text-2)' }}><mt.Icon size={17}/></span>
+                      <span style={{ fontSize:'1.15rem' }}>{mt.icon}</span>
                       <div>
                         <div style={{ fontWeight:700,fontSize:'.8rem',color:mood===m?mt.color:'var(--text)',textTransform:'capitalize' }}>{m}</div>
                         <div style={{ fontSize:'.62rem',color:'var(--text-3)' }}>{mt.desc}</div>
@@ -1053,7 +1156,7 @@ export default function Generate() {
           {genre && mood && (
             <div className="card" style={{ padding:'1.5rem',borderTop:`3px solid ${wiz===3?'var(--accent-3)':'var(--border)'}`,transition:'border-color .3s',animation:'fadeUp .28s ease' }}>
               <div style={{ fontWeight:800,fontSize:'1rem',fontFamily:"'Playfair Display',serif",marginBottom:'.2rem' }}>
-                <span style={{ color:'var(--accent-3)',marginRight:'.35rem' }}>3</span>Key &amp; Scale
+                <span style={{ color:'var(--accent-3)',marginRight:'.35rem' }}>③</span>Key &amp; Scale
               </div>
               <div style={{ fontSize:'.76rem',color:'var(--text-3)',marginBottom:'1.1rem' }}>Root note + scale mode define every chord in the progression</div>
               <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.1rem' }}>
@@ -1062,7 +1165,7 @@ export default function Generate() {
                   <div style={{ display:'flex',flexWrap:'wrap',gap:'.32rem' }}>
                     {KEYS.map(k => (
                       <button key={k} onClick={()=>{setKey(k);setWiz(3)}}
-                        style={{ width:36,height:36,borderRadius:9,border:`2px solid ${key===k?'var(--accent-3)':'var(--border)'}`,background:key===k?'rgba(34,211,238,.12)':'var(--bg-2)',color:key===k?'var(--accent-3)':'var(--text)',fontFamily:"'Space Mono',monospace",fontWeight:700,fontSize:'.8rem',cursor:'pointer',transition:'all .16s' }}>
+                        style={{ width:36,height:36,borderRadius:9,border:`2px solid ${key===k?'var(--accent-3)':'var(--border)'}`,background:key===k?'rgba(0,212,200,.12)':'var(--bg-2)',color:key===k?'var(--accent-3)':'var(--text)',fontFamily:"'Space Mono',monospace",fontWeight:700,fontSize:'.8rem',cursor:'pointer',transition:'all .16s' }}>
                         {k}
                       </button>
                     ))}
@@ -1073,7 +1176,7 @@ export default function Generate() {
                   <div style={{ display:'flex',flexDirection:'column',gap:'.32rem' }}>
                     {SCALE_MODES.map(s => (
                       <button key={s.id} onClick={()=>{setScaleMode(s.id);setWiz(4)}}
-                        style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.42rem .7rem',borderRadius:9,border:`1.5px solid ${scaleMode===s.id?'var(--accent-3)':'var(--border)'}`,background:scaleMode===s.id?'rgba(34,211,238,.08)':'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',transition:'all .16s',textAlign:'left' }}>
+                        style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'.42rem .7rem',borderRadius:9,border:`1.5px solid ${scaleMode===s.id?'var(--accent-3)':'var(--border)'}`,background:scaleMode===s.id?'rgba(0,212,200,.08)':'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',transition:'all .16s',textAlign:'left' }}>
                         <div>
                           <span style={{ fontWeight:700,fontSize:'.8rem',color:scaleMode===s.id?'var(--accent-3)':'var(--text)' }}>{s.label}</span>
                           <span style={{ fontSize:'.67rem',color:'var(--text-3)',marginLeft:'.4rem' }}>{s.desc}</span>
@@ -1091,7 +1194,7 @@ export default function Generate() {
           {genre && mood && (
             <div className="card" style={{ padding:'1.5rem',borderTop:`3px solid ${wiz===4?'#e87a30':'var(--border)'}`,transition:'border-color .3s',animation:'fadeUp .28s ease' }}>
               <div style={{ fontWeight:800,fontSize:'1rem',fontFamily:"'Playfair Display',serif",marginBottom:'.2rem' }}>
-                <span style={{ color:'#e87a30',marginRight:'.35rem' }}>4</span>Instrumentation
+                <span style={{ color:'#e87a30',marginRight:'.35rem' }}>④</span>Instrumentation
                 <span style={{ fontWeight:400,fontSize:'.74rem',color:'var(--text-3)',marginLeft:'.5rem' }}>{instruments.length} selected</span>
               </div>
               <div style={{ fontSize:'.76rem',color:'var(--text-3)',marginBottom:'1rem' }}>Choose the instruments — selecting Vocals reveals voice type options below</div>
@@ -1101,24 +1204,25 @@ export default function Generate() {
                     style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.3rem',padding:'.7rem .5rem',borderRadius:12,border:`2px solid ${instruments.includes(inst.id)?'#e87a30':'var(--border)'}`,background:instruments.includes(inst.id)?'rgba(232,122,48,.1)':'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',transition:'all .2s' }}
                     onMouseEnter={e=>{if(!instruments.includes(inst.id)){e.currentTarget.style.borderColor='#e87a3066';e.currentTarget.style.transform='translateY(-2px)'}}}
                     onMouseLeave={e=>{if(!instruments.includes(inst.id)){e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform=''}}}>
-                    <span style={{ display:'flex',color:instruments.includes(inst.id)?'#e87a30':'var(--text-2)' }}><inst.Icon size={22}/></span>
+                    <span style={{ fontSize:'1.35rem' }}>{inst.icon}</span>
                     <span style={{ fontSize:'.77rem',fontWeight:700,color:instruments.includes(inst.id)?'#e87a30':'var(--text)' }}>{inst.label}</span>
                     {instruments.includes(inst.id) && <span style={{ fontSize:'.58rem',color:'#e87a30' }}>✓</span>}
                   </button>
                 ))}
               </div>
 
+              {/* Voice type — only when vocals selected */}
               {hasVocals && (
                 <div style={{ marginTop:'1.1rem',paddingTop:'1rem',borderTop:'1px solid var(--border)',animation:'fadeUp .22s ease' }}>
                   <div style={{ fontWeight:700,fontSize:'.875rem',marginBottom:'.65rem',display:'flex',alignItems:'center',gap:'.42rem' }}>
-                    Voice Type
+                    🎤 Voice Type
                     <span style={{ fontWeight:400,fontSize:'.72rem',color:'var(--text-3)' }}>Only for songs with a singer</span>
                   </div>
                   <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(105px,1fr))',gap:'.42rem' }}>
                     {VOICE_TYPES.map(v => (
                       <button key={v.id} onClick={()=>setVoiceType(v.id)}
-                        style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.22rem',padding:'.58rem .4rem',borderRadius:10,border:`2px solid ${voiceType===v.id?'var(--red)':'var(--border)'}`,background:voiceType===v.id?'rgba(239,68,68,.1)':'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',transition:'all .18s' }}>
-                        <span style={{ display:'flex',color:voiceType===v.id?'var(--red)':'var(--text-2)' }}><v.Icon size={19}/></span>
+                        style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:'.22rem',padding:'.58rem .4rem',borderRadius:10,border:`2px solid ${voiceType===v.id?'var(--red)':'var(--border)'}`,background:voiceType===v.id?'rgba(232,54,93,.1)':'var(--bg-2)',cursor:'pointer',fontFamily:'inherit',transition:'all .18s' }}>
+                        <span style={{ fontSize:'1.2rem' }}>{v.icon}</span>
                         <span style={{ fontSize:'.75rem',fontWeight:700,color:voiceType===v.id?'var(--red)':'var(--text)' }}>{v.label}</span>
                         <span style={{ fontSize:'.6rem',color:'var(--text-3)',textAlign:'center',lineHeight:1.3 }}>{v.desc}</span>
                       </button>
@@ -1133,7 +1237,7 @@ export default function Generate() {
           {genre && mood && (
             <div className="card" style={{ padding:'1.5rem',borderTop:`3px solid ${wiz===5?'var(--green)':'var(--border)'}`,animation:'fadeUp .28s ease' }}>
               <div style={{ fontWeight:800,fontSize:'1rem',fontFamily:"'Playfair Display',serif",marginBottom:'.2rem' }}>
-                <span style={{ color:'var(--green)',marginRight:'.35rem' }}>5</span>Parameters
+                <span style={{ color:'var(--green)',marginRight:'.35rem' }}>⑤</span>Parameters
               </div>
               <div style={{ fontSize:'.76rem',color:'var(--text-3)',marginBottom:'1rem' }}>Fine-tune tempo, length and number of variations</div>
               <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'1rem' }}>
@@ -1154,10 +1258,10 @@ export default function Generate() {
 
           {/* Generate button */}
           <button className="btn btn--primary" onClick={handleGenerate} disabled={loading||!canGen}
-            style={{ padding:'.9rem',fontSize:'1rem',justifyContent:'center',borderRadius:16,opacity:canGen?1:.45,gap:'.5rem' }}>
+            style={{ padding:'.9rem',fontSize:'1rem',justifyContent:'center',borderRadius:16,opacity:canGen?1:.45 }}>
             {loading
               ? <><span className="spinner" style={{width:16,height:16,borderWidth:2}}/> {jobStatus==='queued'?'Queued…':'Generating…'}</>
-              : canGen ? <><IconBolt size={17}/> Generate Progressions</> : `Complete steps ${!genre?'1 ':''} ${!mood?'2 ':''} ${!instruments.length?'4 ':''}above`
+              : canGen ? '🎵 Generate Progressions' : `Complete steps ${!genre?'① ':''} ${!mood?'② ':''} ${!instruments.length?'④ ':''}above`
             }
           </button>
 
@@ -1178,11 +1282,11 @@ export default function Generate() {
             <div style={{ fontWeight:800,fontSize:'.92rem',fontFamily:"'Playfair Display',serif",marginBottom:'.85rem' }}>Your Selection</div>
             <div style={{ display:'flex',flexDirection:'column',gap:'.42rem' }}>
               {[
-                { label:'Genre',       val: gObj ? <span style={{display:'flex',alignItems:'center',gap:'.3rem',justifyContent:'flex-end'}}><gObj.Icon size={13}/> {gObj.label}</span> : '—', color: gObj?.color },
-                { label:'Mood',        val: mObj ? <span style={{display:'flex',alignItems:'center',gap:'.3rem',justifyContent:'flex-end'}}><mObj.Icon size={13}/> {mood}</span> : '—', color: mObj?.color },
+                { label:'Genre',       val: gObj ? `${gObj.icon} ${gObj.label}` : '—',                         color: gObj?.color },
+                { label:'Mood',        val: mObj ? `${mObj.icon} ${mood}` : '—',                               color: mObj?.color },
                 { label:'Key',         val: `${key} ${scaleMode}`,                                              color:'var(--accent-3)' },
                 { label:'Instruments', val: instruments.length ? instruments.join(', ') : '—',                  color:'#e87a30' },
-                ...(hasVocals ? [{label:'Voice', val:(()=>{const vt=VOICE_TYPES.find(v=>v.id===voiceType);return vt?<span style={{display:'flex',alignItems:'center',gap:'.3rem',justifyContent:'flex-end'}}><vt.Icon size={13}/> {voiceType}</span>:voiceType})(), color:'var(--red)'}] : []),
+                ...(hasVocals ? [{label:'Voice', val:`${VOICE_TYPES.find(v=>v.id===voiceType)?.icon} ${voiceType}`, color:'var(--red)'}] : []),
                 { label:'BPM',         val: `${bpm} ♩`,                                                        color:'var(--accent-2)' },
                 { label:'Duration',    val: fmtDur(duration),                                                   color:'var(--text-2)' },
               ].map(({label,val,color}) => (
@@ -1199,15 +1303,16 @@ export default function Generate() {
             <div className="card" style={{ padding:'1.25rem' }}>
               <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'.85rem',flexWrap:'wrap',gap:'.4rem' }}>
                 <div style={{ fontWeight:800,fontSize:'.9rem',fontFamily:"'Playfair Display',serif" }}>
-                  {result.isLocal ? 'Preview' : 'Generated'}
+                  {result.isLocal ? <><span style={{color:'var(--accent-2)'}}>⚡</span> Preview</> : <><span style={{color:'var(--green)'}}>✅</span> Generated</>}
                 </div>
                 <div style={{ display:'flex',gap:'.28rem' }}>
-                  {[['sheet','Sheet'],['progressions','Chords'],['scale','Scale']].map(([v,l]) => (
+                  {[['sheet','🎼 Sheet'],['progressions','🎵 Chords'],['scale','📐 Scale']].map(([v,l]) => (
                     <button key={v} onClick={()=>setView(v)} style={{ padding:'.22rem .5rem',borderRadius:8,border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700,fontSize:'.7rem',transition:'all .16s',background:view===v?'var(--accent)':'var(--bg-3)',color:view===v?'#fff':'var(--text-2)' }}>{l}</button>
                   ))}
                 </div>
               </div>
 
+              {/* Audio player */}
               <PlayerBar
                 player={player}
                 chords={result.progressions[0]?.split(' — ').filter(Boolean)||[]}
@@ -1249,18 +1354,18 @@ export default function Generate() {
                   <div style={{ fontWeight:700,fontSize:'.82rem',marginBottom:'.6rem' }}>{result.key} {result.mode} Scale</div>
                   <div style={{ display:'flex',gap:'.28rem',flexWrap:'wrap',marginBottom:'1rem' }}>
                     {result.scaleNotes.map((n,i) => (
-                      <div key={i} style={{ flex:1,minWidth:34,padding:'.45rem .2rem',textAlign:'center',background:i===0?'rgba(56,189,248,.1)':'var(--bg-2)',border:`1.5px solid ${i===0?'var(--accent)':'var(--border)'}`,borderRadius:8,fontSize:'.8rem',fontWeight:700,color:i===0?'var(--accent)':'var(--text)' }}>{n}</div>
+                      <div key={i} style={{ flex:1,minWidth:34,padding:'.45rem .2rem',textAlign:'center',background:i===0?'rgba(255,107,71,.1)':'var(--bg-2)',border:`1.5px solid ${i===0?'var(--accent)':'var(--border)'}`,borderRadius:8,fontSize:'.8rem',fontWeight:700,color:i===0?'var(--accent)':'var(--text)' }}>{n}</div>
                     ))}
                   </div>
                   {result.instruments.length > 0 && (
                     <div style={{ fontSize:'.78rem',color:'var(--text-2)',lineHeight:1.65 }}>
-                      <div style={{ fontWeight:700,fontSize:'.8rem',marginBottom:'.45rem' }}>Performance notes</div>
+                      <div style={{ fontWeight:700,fontSize:'.8rem',marginBottom:'.45rem' }}>💡 Performance notes</div>
                       {result.instruments.map(id => {
                         const inst = INSTRUMENTS_LIST.find(i=>i.id===id)
                         const note = result.instrNotes?.[id]
                         const fb = { guitar:`Capo for ${result.key}. Strum D-DU-UDU.`, piano:`Root octaves LH, inversions RH.`, bass:`Root beat 1, 5th beat 3.`, drums:`${result.bpm}bpm — kick 1, snare 2&4.`, vocals:`Voice (${result.voiceType}): stay in ${result.key} scale.`, strings:`Long bow on root + 5th.`, synth:`Slow-attack pad + 1-3-5-7 arp.`, brass:`Staccato beat 1, sustain off-beats.` }
                         if (!inst) return null
-                        return <div key={id} style={{ padding:'.28rem 0',borderBottom:'1px solid var(--border)',display:'flex',gap:'.4rem',alignItems:'flex-start' }}><span style={{color:'var(--accent)',fontWeight:700,display:'flex',alignItems:'center',gap:'.3rem',flexShrink:0}}><inst.Icon size={13}/> {inst.label}:</span><span>{note||fb[id]||''}</span></div>
+                        return <div key={id} style={{ padding:'.28rem 0',borderBottom:'1px solid var(--border)' }}><span style={{color:'var(--accent)',fontWeight:700}}>{inst.icon} {inst.label}: </span>{note||fb[id]||''}</div>
                       })}
                     </div>
                   )}
@@ -1268,29 +1373,33 @@ export default function Generate() {
               )}
 
               <div style={{ marginTop:'1rem',paddingTop:'.75rem',borderTop:'1px solid var(--border)' }}>
+                {/* Instrument filter for PDF export */}
                 <div style={{ marginBottom:'.6rem' }}>
                   <div style={{ fontSize:'.68rem',fontWeight:700,color:'var(--text-3)',textTransform:'uppercase',letterSpacing:'.05em',marginBottom:'.35rem' }}>PDF part filter</div>
                   <div style={{ display:'flex',gap:'.3rem',flexWrap:'wrap' }}>
-                    {['all',...(result.instruments||[])].map(inst => (
-                      <button key={inst} onClick={()=>setPdfInstr(inst)}
-                        style={{ padding:'.2rem .5rem',borderRadius:8,border:`1.5px solid ${pdfInstr===inst?'var(--accent)':'var(--border)'}`,background:pdfInstr===inst?'rgba(56,189,248,.1)':'var(--bg-3)',color:pdfInstr===inst?'var(--accent)':'var(--text-2)',fontSize:'.7rem',fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all .16s' }}>
-                        {inst==='all'?'Full Score':inst}
-                      </button>
-                    ))}
+                    {['all',...(result.instruments||[])].map(inst => {
+                      const icons = {all:'🎼',piano:'🎹',guitar:'🎸',bass:'🎸',strings:'🎻',brass:'🎷',drums:'🥁',synth:'🎛️',vocals:'🎤'}
+                      return (
+                        <button key={inst} onClick={()=>setPdfInstr(inst)}
+                          style={{ padding:'.2rem .5rem',borderRadius:8,border:`1.5px solid ${pdfInstr===inst?'var(--accent)':'var(--border)'}`,background:pdfInstr===inst?'rgba(255,107,71,.1)':'var(--bg-3)',color:pdfInstr===inst?'var(--accent)':'var(--text-2)',fontSize:'.7rem',fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all .16s' }}>
+                          {icons[inst]||'♪'} {inst==='all'?'Full Score':inst}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
                 <div style={{ display:'flex',gap:'.38rem',flexWrap:'wrap' }}>
                   <button className="btn btn--primary btn--sm" onClick={handlePDF} disabled={pdfLoading}>
-                    {pdfLoading?<><span className="spinner" style={{width:10,height:10,borderWidth:1.5}}/> Building…</>:'Sheet Music PDF'}
+                    {pdfLoading?<><span className="spinner" style={{width:10,height:10,borderWidth:1.5}}/> Building…</>:'⬇ Sheet Music PDF'}
                   </button>
-                  <button className="btn btn--secondary btn--sm" onClick={()=>navigator.clipboard.writeText(result.progressions.join('\n')).catch(()=>{})}>Copy</button>
-                  <button className="btn btn--ghost btn--sm" onClick={handleGenerate} disabled={loading} style={{gap:'.35rem'}}><IconReplay size={13}/> Regenerate</button>
+                  <button className="btn btn--secondary btn--sm" onClick={()=>navigator.clipboard.writeText(result.progressions.join('\n')).catch(()=>{})}>📋 Copy</button>
+                  <button className="btn btn--ghost btn--sm" onClick={handleGenerate} disabled={loading}>↺ Regenerate</button>
                 </div>
               </div>
             </div>
           ) : (
             <div className="card" style={{ padding:'2.5rem',textAlign:'center',color:'var(--text-3)' }}>
-              <div style={{ display:'flex',justifyContent:'center',marginBottom:'.75rem',color:'var(--accent)' }}><IconBolt size={40}/></div>
+              <div style={{ fontSize:'2.5rem',marginBottom:'.75rem' }}>🎵</div>
               <div style={{ fontFamily:"'Playfair Display',serif",fontWeight:700,fontSize:'.95rem',color:'var(--text-2)',marginBottom:'.35rem' }}>Your chord sheet will appear here</div>
               <div style={{ fontSize:'.78rem' }}>Complete the steps on the left, then hit Generate</div>
             </div>
@@ -1303,6 +1412,10 @@ export default function Generate() {
         @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
         @keyframes dropIn  { from{opacity:0;transform:scale(.92) translateY(-10px)} to{opacity:1;transform:scale(1) translateY(0)} }
         @keyframes bounceIn{ from{transform:scale(.5) rotate(-8deg);opacity:0} to{transform:scale(1) rotate(0);opacity:1} }
+        @media (max-width:920px) {
+          .page-wrap > div[style*="grid-template-columns: 1fr 380px"] { grid-template-columns:1fr !important; }
+          .page-wrap > div[style*="grid-template-columns: 1fr 380px"] > div:last-child { position:static !important; }
+        }
       `}</style>
     </div>
   )
